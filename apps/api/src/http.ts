@@ -35,7 +35,7 @@ export function configureApp(app: INestApplication, exposeDocs = true) {
   });
   app.useGlobalFilters(new ApiExceptionFilter());
   if (exposeDocs) {
-    const config = new DocumentBuilder().setTitle('Altıkod CRM API').setVersion('0.5.0').addCookieAuth('saleshub_session').setDescription('Phases 1–5: sessions, CRM, catalog, immutable quotes/PDF, reports, CSV and handoffs. Mutation requests require matching Origin and session X-CSRF-Token. Money is represented as decimal strings. Customer send/accept actions are manual records.').build();
+    const config = new DocumentBuilder().setTitle('Altıkod CRM API').setVersion('0.5.0').addCookieAuth('saleshub_session').setDescription('Phases 1–6 and 8 (messaging core): sessions, CRM, catalog, immutable quotes/PDF, reports, CSV, handoffs, delivery, knowledge, academy and team messaging. Mutation requests require matching Origin and session X-CSRF-Token. Money is represented as decimal strings. Customer send/accept actions are manual records.').build();
     SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, config));
   }
 }

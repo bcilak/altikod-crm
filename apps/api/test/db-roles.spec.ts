@@ -22,6 +22,7 @@ test('runtime database role is least-privileged', async t => {
       await denied('DROP TABLE "Company"');
       await denied('TRUNCATE "Company"');
       await denied('DROP TRIGGER quote_delete_immutable ON "QuoteVersion"');
+      await denied('DROP TRIGGER message_append_only ON "Message"');
     });
     await t.test('audit log is append-only', async () => {
       await db.query('INSERT INTO "AuditLog" (id, action, entity) VALUES ($1, $2, $3)', [randomUUID(), 'ROLE_TEST', 'test']);

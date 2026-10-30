@@ -1,6 +1,6 @@
-# Faz 8 planı — ekip içi mesajlaşma ve belge paylaşımı
+# Faz 8 — ekip içi mesajlaşma ve belge paylaşımı
 
-30 Ekim 2026. **Durum: planlandı, uygulanmadı.** Bu belge kapsam, karar ve kabul taslağıdır; kodda bu özelliğe ait ekran, uç veya tablo yoktur. Faz 7 (entegrasyonlar ve AI) kapsam dışı kaldığı için bu iş Faz 8 olarak numaralandı; dış sisteme bağlanmadığı için Faz 7 kararıyla çelişmez.
+30 Ekim 2026. **Durum:** F8-01 kararları önerilen varsayılanlarla kabul edildi. **F8-02 (API çekirdeği) uygulandı ve test edildi**; ekran (F8-03), dosya ekleri (F8-04), canlı akış ve bildirim (F8-05), arama/düzenleme/silme/saklama (F8-06) henüz yok. Kullanıcıların bugün açabileceği bir mesajlaşma ekranı bulunmaz. Teslim edilenlerin kaydı aşağıda “F8-02 teslimatı” bölümündedir. Faz 7 (entegrasyonlar ve AI) kapsam dışı kaldığı için bu iş Faz 8 olarak numaralandı; dış sisteme bağlanmadığı için Faz 7 kararıyla çelişmez.
 
 ## Sorun
 
@@ -118,9 +118,11 @@ Sayfalama imleç tabanlı (`createdAt, id`). Saklama süresi dolan mesajlar içi
 
 F8-03 sonunda polling ile kullanılabilir bir sürüm olur; canlılık (F8-05) ayrı teslimattır.
 
-## Ürün sahibinin vereceği kararlar
+## Ürün sahibi kararları
 
-| Karar | Önerilen varsayılan |
+30 Ekim 2026'da ürün sahibi önerilen varsayılanlarla devam edilmesini istedi. Yönetici erişimi ve saklama süresi için hukuki görüş yine de alınmalıdır; bu belge hukuki değerlendirme sunmaz.
+
+| Karar | Kabul edilen varsayılan |
 |---|---|
 | Yöneticinin özel grup/birebir mesajlara erişimi | Uygulamada erişim yok. Hukuki talep hâlinde yalnız ADMIN'in, gerekçe girerek başlattığı ve denetim kaydına düşen dışa aktarma; kullanıcılara aydınlatma metniyle önceden bildirilir. Hukuki görüş alınmalı. |
 | Saklama süresi | Kayıt konuşmaları kayıtla birlikte; kanal/grup/birebir 2 yıl; dosyalar mesajla birlikte. |
@@ -130,7 +132,46 @@ F8-03 sonunda polling ile kullanılabilir bir sürüm olur; canlılık (F8-05) a
 | İlk kanallar | #genel, #satış, #teknik, #duyurular (yalnız yönetici yazar). |
 | WhatsApp geçmişi | İçe aktarılmaz; gerekli belgeler elle ilgili kayda yüklenir. |
 
-## Kabul kriterleri (taslak)
+## F8-02 teslimatı
+
+### API (`/api/v1/messaging`, tümü `messaging.use` izni ister)
+
+| Uç | İş |
+|---|---|
+| `GET conversations?kind=` | Üyesi olunan konuşmalar, tüm herkese açık kanallar, takip edilen kayıt konuşmaları; okunmamış sayıları ve `unreadTotal` |
+| `POST conversations` | Kanal (`channels.manage`) veya özel grup açar |
+| `POST direct` | İki kişi için tek birebir konuşmayı açar veya mevcut olanı döner |
+| `POST record-conversations` | Görülebilen firma/fırsat/projenin konuşmasını ilk kullanımda oluşturur ve takip eder |
+| `GET/PATCH conversations/:id` | Detay, üyeler, `canPost`/`canManage`; ad, konu, yazma kısıtı, arşiv |
+| `POST conversations/:id/members`, `…/members/:userId/remove`, `…/join`, `…/leave` | Üyelik |
+| `GET/POST conversations/:id/messages` | İmleçli liste (`beforeSeq`, `afterSeq`, `parentId`, `limit`) ve gönderim |
+| `POST conversations/:id/read` | Okundu konumu (geri gitmez) |
+| `GET users?search=` | Konuşma başlatmak için ad ve rol; e-posta/telefon dönmez |
+
+### Uygulanan kurallar
+
+- Görünürlük tek bir sorgu koşuluyla (`conversationScope`) uygulanır; liste, detay, mesaj, okundu ve gönderim aynı koşulu kullanır. Kayıt konuşmasında üyelik tablosu yoktur; her istekte firma (`companyScope`) veya proje (`projectScope`) kapsamı yeniden değerlendirilir.
+- Yazma: kanalda üyelik (VIEWER yazamaz; `#duyurular` yalnız ADMIN/MANAGER), grup ve birebirde üyelik, firma/fırsat konuşmasında firma yazma paylaşımı ve arşivlenmemiş firma, proje konuşmasında satış için proje yazma kapsamı, teknik personel için projeyi görebilmek. VIEWER birebir dışında yazamaz ve gruba eklenemez.
+- ADMIN dahil kimse üyesi olmadığı özel grup, özel kanal veya birebir konuşmayı göremez.
+- Mesaj numarası (`seq`) konuşma satırı kilitlenerek boşluksuz verilir. `(yazar, clientNonce)` tekildir; tekrar eden istek aynı mesajı döner, aynı anahtarla farklı içerik 409 verir.
+- Yanıtlar tek seviyelidir ve üst mesajla aynı konuşmada olmak zorundadır; PostgreSQL tetikleyicisi bunu ve mesajların değiştirilemez/silinemez olmasını uygulama dışından da korur. Düzenleme/silme F8-06'da revizyon geçmişiyle bu tetikleyici güncellenerek gelecek.
+- Kanal adları küçük harfe çevrilir, `#` atılır, yalnız harf/rakam/`-`/`_` içerir; büyük-küçük harf fark etmeksizin tekildir.
+- Tek grup sahibi ayrılırsa sahiplik en eski aktif üyeye geçer. Pasif kullanıcının mesajları kalır, yazar bilgisinde `isActive: false` döner; oturumu kapandığı için erişimi biter.
+- Konuşma oluşturma, üyelik ve arşiv işlemleri denetim kaydına düşer; mesaj içeriği denetim kaydına kopyalanmaz.
+
+### Plandan farklar
+
+- Okundu konumu ayrı `ConversationReadState` tablosundadır (`lastReadMessageId` yerine `lastReadSeq`); üyelik tablosu erişim, okundu tablosu yalnız konum içindir. Kayıt konuşmasını “takip etmek” okundu satırının varlığıdır ve erişim vermez.
+- Herkese açık kanallar migration ile açıldı (`#genel`, `#satış`, `#teknik`, `#duyurular`), kimse otomatik üye yapılmadı; ekran (F8-03) “Katıl” eylemini sunacak.
+- Bahsetme (`@kullanıcı`) ve bildirim F8-05'e, sabitleme/sessize alma F8-06'ya kaldı.
+
+### Doğrulama (30 Ekim 2026)
+
+- Lint, TypeScript, birim/smoke testleri (OpenAPI'de mesajlaşma uçları dahil) ve üretim derlemesi geçti.
+- 52 PostgreSQL entegrasyon kontrolü en az yetkili uygulama rolüyle geçti; bunların 10'u Faz 8: başlangıç kanalları ve yazma kısıtı, kanal yönetimi ve ad tekilliği, özel grup/birebir gizliliği (ADMIN dahil), firma paylaşımı READ/WRITE/NONE geçişlerinin aynı oturumda anında etkisi ve arşivli firma, fırsat konuşmasının teknik personele kapalı olması ve proje konuşmasında yalnız atanmış teknik personel, eşzamanlı tekrar gönderimde tek mesaj ve boşluksuz sıra, okunmamış sayıları/okundu/yanıt/sayfalama, metin doğrulaması ve DB düzeyinde değişmezlik, pasif kullanıcı. En az yetki testi uygulama rolünün mesaj tetikleyicisini kaldıramadığını da doğrular.
+- Ortam notu: bu oturumdaki konteynerde önceden kurulu Chromium, projenin Playwright sürümünün beklediği klasör adında değildi; Faz 4 PDF testleri için yalnız yerelde `PLAYWRIGHT_BROWSERS_PATH` ile aynı tarayıcıya bağlantı verildi, repoda değişiklik yapılmadı. Playwright E2E senaryosu bu fazda eklenmedi (ekran yok).
+
+## Kabul kriterleri
 
 - SALES-B, SALES-A'nın özel firmasının/fırsatının konuşmasını, mesajlarını, dosyalarını ve arama sonuçlarını doğrudan ID, liste, arama, SSE olayı, bildirim veya dosya adresiyle göremez.
 - Firma paylaşımı geri alındığında aynı oturumla sonraki mesaj okuma/yazma ve dosya indirme reddedilir; açık SSE akışı o konuşma için olay göndermez.

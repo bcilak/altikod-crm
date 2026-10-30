@@ -2,6 +2,7 @@ import { z } from 'zod';
 export * from './crm';
 export * from './sales';
 export * from './delivery';
+export * from './messaging';
 
 export const healthSchema = z.object({ status: z.literal('ok'), service: z.literal('saleshub-api') });
 export type HealthResponse = z.infer<typeof healthSchema>;

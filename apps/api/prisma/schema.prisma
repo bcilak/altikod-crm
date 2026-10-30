@@ -59,6 +59,9 @@ model User {
   ownedProjects Project[] @relation("ProjectOwner")
   knowledgeArticles KnowledgeArticle[] @relation("KnowledgeOwner")
   lessonProgress LessonProgress[]
+  conversationMemberships ConversationMember[]
+  conversationReads ConversationReadState[]
+  messages Message[]
 }
 model RolePermission {
   role     Role
@@ -130,6 +133,7 @@ model Company {
   quotes       Quote[]
   handoffs     Handoff[]
   projects     Project[]
+  conversation Conversation?
   @@index([ownerId, status])
   @@index([domain])
 }
@@ -189,6 +193,7 @@ model Opportunity {
   quotes      Quote[]
   handoff     Handoff?
   project     Project?
+  conversation Conversation?
   acceptedQuoteVersionId String? @unique @db.Uuid
   @@index([ownerId, stage, expectedCloseAt])
   @@index([companyId])
@@ -477,6 +482,7 @@ model Project {
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
   milestones ProjectMilestone[]
   tasks Task[]
+  conversation Conversation?
   @@index([ownerId, status])
   @@index([companyId])
 }
@@ -614,4 +620,93 @@ model LessonProgress {
   completedAt DateTime? @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
   @@unique([userId, lessonId])
+}
+
+// Phase 8: team messaging. Record conversations carry no membership: access is the record's own scope, checked on every read.
+enum ConversationKind {
+  CHANNEL
+  GROUP
+  DIRECT
+  RECORD
+}
+
+enum ConversationMemberRole {
+  OWNER
+  MEMBER
+}
+
+model Conversation {
+  id                String                  @id @default(uuid()) @db.Uuid
+  kind              ConversationKind
+  name              String?
+  topic             String                  @default("")
+  isPublic          Boolean                 @default(false)
+  postingRestricted Boolean                 @default(false)
+  directKey         String?                 @unique
+  companyId         String?                 @unique @db.Uuid
+  company           Company?                @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  opportunityId     String?                 @unique @db.Uuid
+  opportunity       Opportunity?            @relation(fields: [opportunityId], references: [id], onDelete: Restrict)
+  projectId         String?                 @unique @db.Uuid
+  project           Project?                @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  lastSeq           Int                     @default(0)
+  lastMessageAt     DateTime?               @db.Timestamptz(6)
+  createdById       String?                 @db.Uuid
+  archivedAt        DateTime?               @db.Timestamptz(6)
+  version           Int                     @default(1)
+  createdAt         DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime                @updatedAt @db.Timestamptz(6)
+  members           ConversationMember[]
+  reads             ConversationReadState[]
+  messages          Message[]
+
+  @@index([kind, lastMessageAt])
+}
+
+model ConversationMember {
+  conversationId String                 @db.Uuid
+  conversation   Conversation           @relation(fields: [conversationId], references: [id])
+  userId         String                 @db.Uuid
+  user           User                   @relation(fields: [userId], references: [id])
+  role           ConversationMemberRole @default(MEMBER)
+  joinedAt       DateTime               @default(now()) @db.Timestamptz(6)
+  leftAt         DateTime?              @db.Timestamptz(6)
+
+  @@id([conversationId, userId])
+  @@index([userId, leftAt])
+}
+
+/**
+ * Read position only; never grants access.
+ */
+model ConversationReadState {
+  conversationId String       @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  userId         String       @db.Uuid
+  user           User         @relation(fields: [userId], references: [id])
+  lastReadSeq    Int          @default(0)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  seq            Int
+  authorId       String       @db.Uuid
+  author         User         @relation(fields: [authorId], references: [id])
+  parentId       String?      @db.Uuid
+  parent         Message?     @relation("MessageReplies", fields: [parentId], references: [id], onDelete: Restrict)
+  replies        Message[]    @relation("MessageReplies")
+  body           String
+  clientNonce    String
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+
+  @@unique([conversationId, seq])
+  @@unique([authorId, clientNonce])
+  @@index([conversationId, parentId, seq])
+  @@index([parentId, seq])
 }

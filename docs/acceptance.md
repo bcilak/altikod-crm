@@ -56,9 +56,9 @@ Bu liste test planıdır; uygulandı/geçti iddiası değildir. Çalıştırılm
 - Öğrenen eğitim yanıtlarında cevap anahtarını göremez; puan sunucuda hesaplanır; yalnız kendi ilerlemesi güncellenir; ilerleme raporu yalnız eğitim yöneticisine açıktır.
 
 
-## Faz 8 (planlandı, uygulanmadı)
+## Faz 8
 
-Ayrıntılı taslak: `docs/phase-8-team-messaging.md`.
+Ayrıntı: `docs/phase-8-team-messaging.md`. F8-02'de ilk iki madde ve tekrarlanan gönderimin tek mesaj üretmesi API düzeyinde test edildi. SSE ve bildirim kısmı F8-05'te, dosya maddesi F8-04'te test edilecek.
 
 - Kayıt konuşmasının mesajları, dosyaları ve arama sonuçları kayıt kapsamı dışındaki kullanıcıya hiçbir uçtan (ID, liste, arama, SSE, bildirim, dosya adresi) görünmez; paylaşım iptali anında uygulanır.
 - Özel grup ve birebir konuşmalar üye olmayana, ADMIN dahil, görünmez.

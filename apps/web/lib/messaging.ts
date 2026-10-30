@@ -1,4 +1,4 @@
-export { conversationKindLabels, messageMaxLength } from '@saleshub/shared';
+export { attachmentScanLabels, conversationKindLabels, messageAttachmentAccept, messageAttachmentMaxBytes, messageAttachmentsPerMessage, messageMaxLength } from '@saleshub/shared';
 
 export type ConversationKind = 'CHANNEL' | 'GROUP' | 'DIRECT' | 'RECORD';
 export type RecordType = 'COMPANY' | 'OPPORTUNITY' | 'PROJECT';
@@ -7,7 +7,13 @@ export type Conversation = { id: string; kind: ConversationKind; name: string | 
   record: { type: RecordType; id: string; title: string } | null; directUser: Author | null; joined: boolean; myRole: 'OWNER' | 'MEMBER' | null; memberCount: number | null; unread: number };
 export type ConversationDetail = Conversation & { canPost: boolean; canManage: boolean; members: (Author & { role: 'OWNER' | 'MEMBER' })[] };
 export type ConversationList = { items: Conversation[]; unreadTotal: number };
-export type Message = { id: string; seq: number; parentId: string | null; body: string; createdAt: string; author: Author; replyCount: number };
+export type Attachment = { id: string; name: string; mimeType: string; size: number; scanStatus: 'PENDING' | 'CLEAN' | 'INFECTED' | 'FAILED' | 'UNSCANNED' };
+export type SharedFile = Attachment & { createdAt: string; uploadedBy: { id: string; name: string }; message: { id: string; seq: number; parentId: string | null } };
+export type Message = { id: string; seq: number; parentId: string | null; body: string; createdAt: string; author: Author; replyCount: number; attachments: Attachment[] };
+/** The server re-checks scan state on every download; this only decides whether to offer a link. */
+export const downloadable = (a: Attachment) => a.scanStatus === 'CLEAN' || a.scanStatus === 'UNSCANNED';
+export const attachmentUrl = (id: string, inline = false) => `/api/v1/messaging/attachments/${id}${inline ? '?inline=1' : ''}`;
+export const filesKey = (conversationId: string) => [`/messaging/conversations/${conversationId}/attachments`];
 export type MessagePage = { items: Message[]; hasMore: boolean; lastSeq: number; readSeq: number };
 export type Colleague = { id: string; name: string; role: string };
 

@@ -26,6 +26,8 @@ import { OperationsService } from './sales/operations.service';
 import { SalesJobs } from './sales/sales-jobs.service';
 import { MessagingController } from './messaging/messaging.controller';
 import { MessagingService } from './messaging/messaging.service';
+import { MessageAttachmentsService } from './messaging/attachments.service';
+import { createScanner, MalwareScanner } from './messaging/scanner';
 
-@Module({ controllers: [HealthController, AuthController, UsersController, CompaniesController, OpportunitiesController, WorkController, AuditController, SalesController, ProjectsController, KnowledgeController, AcademyController, MessagingController], providers: [PrismaService, AuthService, { provide: Mailer, useFactory: () => createMailer() }, CompaniesService, OpportunitiesService, WorkService, OutboxService, CatalogService, QuotesService, FilesService, OperationsService, SalesJobs, ProjectsService, KnowledgeService, AcademyService, MessagingService, { provide: APP_GUARD, useClass: AccessGuard }] })
+@Module({ controllers: [HealthController, AuthController, UsersController, CompaniesController, OpportunitiesController, WorkController, AuditController, SalesController, ProjectsController, KnowledgeController, AcademyController, MessagingController], providers: [PrismaService, AuthService, { provide: Mailer, useFactory: () => createMailer() }, CompaniesService, OpportunitiesService, WorkService, OutboxService, CatalogService, QuotesService, FilesService, OperationsService, SalesJobs, ProjectsService, KnowledgeService, AcademyService, MessagingService, MessageAttachmentsService, { provide: MalwareScanner, useFactory: () => createScanner() }, { provide: APP_GUARD, useClass: AccessGuard }] })
 export class AppModule {}

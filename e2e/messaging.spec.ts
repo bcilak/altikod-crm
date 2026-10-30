@@ -3,6 +3,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
 const origin = 'http://localhost:3100';
+const pdf = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF');
+const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4b80000000049454e44ae426082', 'hex');
 async function login(page: Page, email: string, password: string) {
   await page.goto('/login');
   await page.getByLabel('E-posta', { exact: true }).fill(email);
@@ -48,16 +50,32 @@ test('team messaging: channel, direct message, thread, unread badge, record conv
   await page.getByLabel('Mesaj yaz', { exact: true }).fill('Teklif taslağına bakabilir misin? https://example.invalid/teklif');
   await page.getByRole('button', { name: 'Gönder' }).click();
   await expect(page.getByRole('link', { name: 'https://example.invalid/teklif' })).toHaveAttribute('rel', 'noopener noreferrer');
+  // Files: attached as drafts, sent with a message, downloadable by the other participant.
+  await page.locator('form.composer input[type=file]').first().setInputFiles([{ name: 'Teklif taslağı.pdf', mimeType: 'application/pdf', buffer: pdf }, { name: 'ekran.png', mimeType: 'image/png', buffer: png }]);
+  const drafts = page.getByRole('list', { name: 'Eklenecek dosyalar' });
+  await expect(drafts.getByText('Teklif taslağı.pdf')).toBeVisible(); await expect(drafts.getByText('ekran.png')).toBeVisible();
+  await page.getByRole('button', { name: 'Gönder' }).click();
+  await expect(drafts).toHaveCount(0);
+  await expect(page.getByRole('log', { name: 'Mesajlar' }).getByRole('link', { name: /Teklif taslağı\.pdf/ })).toBeVisible();
+  await page.locator('form.composer input[type=file]').first().setInputFiles({ name: 'program.pdf', mimeType: 'application/pdf', buffer: Buffer.from('MZ not a pdf') });
+  await expect(page.locator('form.composer').getByRole('alert')).toContainText('program.pdf: Yalnız PDF');
   await page.screenshot({ path: 'test-results/desktop-messages.png', fullPage: true });
 
   // The colleague sees the unread badge in the menu, opens the conversation and answers in a thread.
   await sales.goto('/dashboard');
-  await expect(sales.getByRole('link', { name: /Mesajlar.*1 okunmamış/ })).toBeVisible();
+  await expect(sales.getByRole('link', { name: /Mesajlar.*2 okunmamış/ })).toBeVisible();
   await sales.getByRole('link', { name: /Mesajlar/ }).click();
-  await sales.getByRole('link', { name: /DEMO E2E Admin.*1 okunmamış mesaj/ }).click();
+  await sales.getByRole('link', { name: /DEMO E2E Admin.*2 okunmamış mesaj/ }).click();
   await expect(sales.getByText('Teklif taslağına bakabilir misin?')).toBeVisible();
   await expect(sales.getByRole('link', { name: /^Mesajlar$/ })).toBeVisible();
-  await sales.getByRole('button', { name: 'Yanıtla' }).click();
+  const fileLink = sales.getByRole('log', { name: 'Mesajlar' }).getByRole('link', { name: /Teklif taslağı\.pdf/ });
+  const [download] = await Promise.all([sales.waitForEvent('download'), fileLink.click()]);
+  expect(download.suggestedFilename()).toBe('Teklif taslağı.pdf');
+  const { readFile: read } = await import('node:fs/promises'); expect((await read((await download.path())!)).equals(pdf)).toBeTruthy();
+  await expect(sales.getByRole('log', { name: 'Mesajlar' }).locator('img.file-thumb')).toHaveJSProperty('naturalWidth', 1);
+  await sales.locator('summary', { hasText: /^Dosyalar$/ }).click();
+  await expect(sales.locator('.shared-files').getByText('ekran.png')).toBeVisible();
+  await sales.getByRole('button', { name: 'Yanıtla' }).first().click();
   await sales.getByLabel('Yanıt yaz').fill('Bakıyorum, öğleden sonra dönerim.'); await sales.getByLabel('Yanıt yaz').press('Enter');
   await expect(sales.getByRole('log', { name: 'Yanıtlar' }).getByText('Bakıyorum, öğleden sonra dönerim.')).toBeVisible();
   await expect(page.getByRole('button', { name: '1 yanıt' })).toBeVisible();

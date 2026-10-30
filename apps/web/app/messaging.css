@@ -52,3 +52,14 @@
   .message-list{max-height:none}
   .composer{position:sticky;bottom:0;background:var(--dp-color-panel);padding-bottom:8px}
 }
+/* F8-04: attachments */
+.message-files,.shared-files,.draft-files{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 2px;list-style:none;padding:0}
+.shared-files{flex-direction:column;gap:12px}.shared-files li{display:grid;gap:4px}
+.file-chip{display:inline-flex;align-items:center;gap:10px;max-width:100%;border:2px solid var(--dp-color-outline);border-radius:12px;background:var(--dp-color-panel);padding:6px 10px;font-size:14px;min-height:44px;text-decoration:none;color:var(--dp-color-ink)}
+.file-chip strong{font-weight:650;overflow-wrap:anywhere}.file-chip small{font-size:12px;color:var(--color-muted)}
+a.file-chip:hover{background:var(--dp-color-selection)}
+.file-chip.blocked{border-style:dashed;background:#fff4d6}
+.file-ext{flex-shrink:0;min-width:44px;text-align:center;font-size:11px;font-weight:800;letter-spacing:.04em;border-radius:7px;padding:4px 6px;background:var(--dp-color-field-soft);border:1px solid var(--dp-color-outline)}
+.file-thumb{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--dp-color-outline);flex-shrink:0}
+.composer-actions{flex-wrap:wrap}.composer-hint{flex:1;min-width:180px;font-size:12px}
+.record-files{margin-top:14px}.record-files summary{cursor:pointer;font-weight:700;font-size:15px}

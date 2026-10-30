@@ -60,5 +60,6 @@ test('HTTP liveness, readiness, redacted errors and OpenAPI contract', async () 
     assert.ok(docs.body.paths['/api/v1/companies'].post.requestBody.content['application/json'].schema.properties.legalName);
     assert.ok(docs.body.paths['/api/v1/messaging/conversations/{id}/messages'].post.requestBody.content['application/json'].schema.properties.clientNonce);
     assert.ok(docs.body.paths['/api/v1/messaging/record-conversations'].post);
+    assert.ok(docs.body.paths['/api/v1/messaging/conversations/{id}/attachments'].post.requestBody.content['application/octet-stream']);
   } finally { await app.close(); }
 });

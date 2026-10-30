@@ -12,10 +12,10 @@ export async function api<T = unknown>(path: string, method = 'GET', body?: unkn
   return data;
 }
 /** Sends a file as raw bytes; the server detects the real type and enforces the size limit. */
-export async function upload<T = unknown>(path: string, file: File): Promise<T> {
+export async function upload<T = unknown>(path: string, file: File, tooLarge = 'Dosya en fazla 5 MB olabilir'): Promise<T> {
   const response = await fetch(`/api/v1${path}?name=${encodeURIComponent(file.name)}`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/octet-stream', ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}) }, body: file, cache: 'no-store' });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new ApiError(response.status, response.status === 413 ? 'Dosya en fazla 5 MB olabilir' : data.error?.message ?? 'Dosya yüklenemedi');
+  if (!response.ok) throw new ApiError(response.status, response.status === 413 ? tooLarge : data.error?.message ?? 'Dosya yüklenemedi');
   return data;
 }
 export type Me = { id: string; name: string; email: string; role: 'ADMIN' | 'MANAGER' | 'SALES' | 'TECHNICAL' | 'VIEWER'; csrfToken: string };

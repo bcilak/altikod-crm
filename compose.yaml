@@ -14,5 +14,14 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+  clamav:
+    # Optional locally: `docker compose --profile scan up -d clamav`, then MALWARE_SCANNER=clamd and CLAMD_HOST=127.0.0.1 in .env.
+    image: clamav/clamav:1.4
+    profiles: ["scan"]
+    ports:
+      - "127.0.0.1:3310:3310"
+    volumes:
+      - saleshub_clamav:/var/lib/clamav
 volumes:
   saleshub_pg:
+  saleshub_clamav:

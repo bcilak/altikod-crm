@@ -9,6 +9,8 @@ import { projectScope } from '../delivery/projects.service';
 
 type RecordType = typeof conversationRecordTypes[number];
 const userCard = { select: { id: true, name: true, isActive: true } } as const;
+export const attachmentSelect = { id: true, name: true, mimeType: true, size: true, scanStatus: true } as const;
+const messageSelect = { id: true, seq: true, conversationId: true, parentId: true, body: true, createdAt: true, author: userCard, attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } } } as const satisfies Prisma.MessageSelect;
 const listInclude = (actorId: string) => ({
   members: { where: { leftAt: null }, select: { userId: true, role: true, user: userCard } },
   reads: { where: { userId: actorId }, select: { lastReadSeq: true } },
@@ -31,7 +33,7 @@ export function conversationScope(actor: Pick<Actor, 'id' | 'role'>): Prisma.Con
 }
 
 /** Writing follows the record's write scope; technicians may write wherever they can see a project. VIEWER never writes outside direct messages. */
-async function canPost(db: Db, actor: Actor, c: Pick<Row, 'id' | 'kind' | 'archivedAt' | 'postingRestricted' | 'companyId' | 'opportunityId' | 'projectId'>) {
+export async function canPost(db: Db, actor: Actor, c: Pick<Row, 'id' | 'kind' | 'archivedAt' | 'postingRestricted' | 'companyId' | 'opportunityId' | 'projectId'>) {
   if (c.archivedAt) return false;
   if (c.kind !== 'RECORD') {
     if (actor.role === 'VIEWER' && c.kind !== 'DIRECT') return false;
@@ -226,19 +228,19 @@ export class MessagingService {
     const rows = await this.prisma.message.findMany({
       where: { conversationId: id, parentId: q.parentId ?? null, ...(q.beforeSeq !== undefined ? { seq: { lt: q.beforeSeq } } : {}), ...(ascending ? { seq: { gt: q.afterSeq } } : {}) },
       orderBy: { seq: ascending ? 'asc' : 'desc' }, take: q.limit + 1,
-      select: { id: true, seq: true, parentId: true, body: true, createdAt: true, author: userCard, _count: { select: { replies: true } } },
+      select: { ...messageSelect, _count: { select: { replies: true } } },
     });
     const hasMore = rows.length > q.limit; const page = rows.slice(0, q.limit);
     if (!ascending) page.reverse();
     return { items: page.map(({ _count, ...m }) => ({ ...m, replyCount: _count.replies })), hasMore, lastSeq: row.lastSeq, readSeq: row.reads[0]?.lastReadSeq ?? 0 };
   }
-  /** Idempotent per (author, clientNonce): a retried request returns the original message instead of posting twice. */
+  /** Idempotent per (author, clientNonce): a retried request returns the original message instead of posting twice. Attached drafts are linked exactly once. */
   async send(actor: Actor, id: string, input: z.infer<typeof messageCreateSchema>) {
     const replay = async () => {
-      const prior = await this.prisma.message.findUnique({ where: { authorId_clientNonce: { authorId: actor.id, clientNonce: input.clientNonce } }, select: { id: true, seq: true, conversationId: true, parentId: true, body: true, createdAt: true, author: userCard } });
+      const prior = await this.prisma.message.findUnique({ where: { authorId_clientNonce: { authorId: actor.id, clientNonce: input.clientNonce } }, select: messageSelect });
       if (!prior) return undefined;
       await this.visible(this.prisma, actor, id);
-      if (prior.conversationId !== id || prior.body !== input.body || prior.parentId !== (input.parentId ?? null)) throw new ConflictException('Bu istek anahtarı başka bir mesaj için kullanıldı');
+      if (prior.conversationId !== id || prior.body !== input.body || prior.parentId !== (input.parentId ?? null) || prior.attachments.map(a => a.id).sort().join() !== [...input.attachmentIds].sort().join()) throw new ConflictException('Bu istek anahtarı başka bir mesaj için kullanıldı');
       return { ...prior, replyCount: 0 };
     };
     const prior = await replay();
@@ -250,8 +252,13 @@ export class MessagingService {
         if (!await canPost(db, actor, row)) throw new ForbiddenException('Bu konuşmaya yazma yetkiniz yok');
         if (input.parentId && !await db.message.findFirst({ where: { id: input.parentId, conversationId: id, parentId: null }, select: { id: true } })) throw new NotFoundException('Yanıtlanan mesaj bulunamadı');
         // The row update serialises writers per conversation and hands out a gap-free sequence number.
+        if (input.attachmentIds.length && await db.messageAttachment.count({ where: { id: { in: input.attachmentIds }, conversationId: id, uploadedById: actor.id, messageId: null, scanStatus: { in: ['PENDING', 'CLEAN', 'UNSCANNED'] } } }) !== input.attachmentIds.length) {
+          throw new ConflictException('Eklerden biri bulunamadı, başka bir mesajda kullanıldı veya güvenlik taramasından geçemedi');
+        }
         const { lastSeq: seq } = await db.conversation.update({ where: { id }, data: { lastSeq: { increment: 1 }, lastMessageAt: new Date() }, select: { lastSeq: true } });
-        const message = await db.message.create({ data: { conversationId: id, seq, authorId: actor.id, parentId: input.parentId, body: input.body, clientNonce: input.clientNonce }, select: { id: true, seq: true, conversationId: true, parentId: true, body: true, createdAt: true, author: userCard } });
+        const created = await db.message.create({ data: { conversationId: id, seq, authorId: actor.id, parentId: input.parentId, body: input.body, clientNonce: input.clientNonce }, select: { id: true } });
+        if (input.attachmentIds.length && (await db.messageAttachment.updateMany({ where: { id: { in: input.attachmentIds }, messageId: null }, data: { messageId: created.id } })).count !== input.attachmentIds.length) throw new ConflictException('Ekler başka bir mesaja bağlandı; tekrar deneyin');
+        const message = await db.message.findUniqueOrThrow({ where: { id: created.id }, select: messageSelect });
         await this.markRead(db, id, actor.id, seq);
         return { ...message, replyCount: 0 };
       });

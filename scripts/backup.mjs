@@ -20,18 +20,21 @@ function command(tool, args, input) {
   return result.stdout;
 }
 const sql = (database, statement) => command('psql', ['-U', dbUser, '-d', database, '-v', 'ON_ERROR_STOP=1', '-At', '-c', statement]).toString().trim();
-// Quote PDFs plus knowledge attachments (Phase 6+); older backups without the attachment table stay verifiable.
+// Quote PDFs, knowledge attachments (Phase 6+) and message attachments (Phase 8+); older backups without those tables stay verifiable.
+// Infected message files are deleted from storage on detection and are deliberately not backed up.
+const fileKey = /^[a-f0-9]{64}\.(pdf|png|jpg|docx|xlsx|pptx|csv|txt)$/;
 const references = database => {
-  const attachments = sql(database, `SELECT to_regclass('public."KnowledgeAttachment"') IS NOT NULL`) === 't'
-    ? ` UNION ALL SELECT "fileKey", "checksum" FROM "KnowledgeAttachment"` : '';
-  return JSON.parse(sql(database, `SELECT COALESCE(json_agg(json_build_object('key', k, 'checksum', c)), '[]'::json) FROM (SELECT "pdfKey" AS k, "pdfChecksum" AS c FROM "QuoteVersion" WHERE "pdfKey" IS NOT NULL${attachments}) refs`));
+  const exists = table => sql(database, `SELECT to_regclass('public."${table}"') IS NOT NULL`) === 't';
+  const knowledge = exists('KnowledgeAttachment') ? ` UNION ALL SELECT "fileKey", "checksum" FROM "KnowledgeAttachment"` : '';
+  const messages = exists('MessageAttachment') ? ` UNION ALL SELECT "fileKey", "checksum" FROM "MessageAttachment" WHERE "scanStatus" <> 'INFECTED'` : '';
+  return JSON.parse(sql(database, `SELECT COALESCE(json_agg(json_build_object('key', k, 'checksum', c)), '[]'::json) FROM (SELECT "pdfKey" AS k, "pdfChecksum" AS c FROM "QuoteVersion" WHERE "pdfKey" IS NOT NULL${knowledge}${messages}) refs`));
 };
 const mode = process.argv[2] ?? 'create';
 if (mode === 'create') {
   const dump = command('pg_dump', ['-U', dbUser, '-d', dbName, '-Fc', '--no-owner', '--no-privileges']);
   // PDFs are append-only. Reading references AFTER the consistent DB dump covers every referenced artifact in that snapshot.
   const files = [...new Map(references(dbName).map(file => [file.key, file])).values()].map(file => {
-    if (!/^[a-f0-9]{64}\.pdf$/.test(file.key)) throw new Error('Unsafe artifact key');
+    if (!fileKey.test(file.key)) throw new Error('Unsafe artifact key');
     let bytes;
     if (process.env.BACKUP_IN_CONTAINER_FILES === 'true') {
       const result = spawnSync('docker', ['compose', '-f', composeFile, 'exec', '-T', 'api', 'cat', `/app/.private-files/${file.key}`], { maxBuffer: 25 * 1024 * 1024 });
@@ -66,7 +69,7 @@ if (mode === 'create') {
     for (const reference of refs) {
       const stored = payload.files.find(item => item.key === reference.key);
       if (!stored || stored.checksum !== reference.checksum || hash(Buffer.from(stored.bytes, 'base64')) !== reference.checksum) throw new Error('Restored DB/file consistency failed');
-      if (!/^[a-f0-9]{64}\.pdf$/.test(reference.key)) throw new Error('Unsafe artifact key');
+      if (!fileKey.test(reference.key)) throw new Error('Unsafe artifact key');
       const restoredPath = resolve(restoredFiles, reference.key);
       writeFileSync(restoredPath, Buffer.from(stored.bytes, 'base64'), { mode: 0o600 });
       if (hash(readFileSync(restoredPath)) !== reference.checksum) throw new Error('Restored file checksum mismatch');

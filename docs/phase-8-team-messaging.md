@@ -1,6 +1,6 @@
 # Faz 8 — ekip içi mesajlaşma ve belge paylaşımı
 
-30 Ekim 2026. **Durum:** F8-01 kararları önerilen varsayılanlarla kabul edildi. **F8-02 (API çekirdeği) ve F8-03 (ekranlar, yoklamayla güncellenen ilk kullanılabilir sürüm) uygulandı ve test edildi.** Dosya ekleri (F8-04), canlı akış ve bildirim (F8-05), arama/düzenleme/silme/saklama (F8-06) ve gerçek kullanıcılarla pilot (F8-07) henüz yok; bu nedenle ekip belge paylaşımını şimdilik CRM'e taşıyamaz. Teslim kayıtları aşağıda “F8-02 teslimatı” ve “F8-03 teslimatı” bölümlerindedir. Faz 7 (entegrasyonlar ve AI) kapsam dışı kaldığı için bu iş Faz 8 olarak numaralandı; dış sisteme bağlanmadığı için Faz 7 kararıyla çelişmez.
+30 Ekim 2026. **Durum:** F8-01 kararları önerilen varsayılanlarla kabul edildi. **F8-02 (API çekirdeği), F8-03 (ekranlar) ve F8-04 (dosya ekleri ve virüs taraması) uygulandı ve test edildi.** Canlı akış ve bildirim (F8-05), arama/düzenleme/silme/saklama (F8-06) ve gerçek kullanıcılarla pilot (F8-07) henüz yok. Teslim kayıtları aşağıda “F8-02/03/04 teslimatı” bölümlerindedir. Faz 7 (entegrasyonlar ve AI) kapsam dışı kaldığı için bu iş Faz 8 olarak numaralandı; dış sisteme bağlanmadığı için Faz 7 kararıyla çelişmez.
 
 ## Sorun
 
@@ -195,6 +195,31 @@ F8-03 sonunda polling ile kullanılabilir bir sürüm olur; canlılık (F8-05) a
 - Lint, TypeScript, birim/smoke testleri ve üretim derlemesi geçti; 52 PostgreSQL entegrasyon kontrolü değişmeden geçti.
 - 4 Playwright senaryosu geçti. Yeni senaryo gerçek davet bağlantısıyla ikinci bir kullanıcı oluşturur ve tarayıcıda şunları doğrular: kanala katılma ve Enter ile gönderme, kişi seçiciyle birebir başlatma, bağlantının `noopener noreferrer` ile çizilmesi, karşı tarafın menüde okunmamış sayısını görmesi ve konuşmayı açınca sayacın kalkması, yanıt dizisi ve diğer tarafta yoklamayla “1 yanıt” görünmesi, firma sayfasında kayıt konuşması, erişimi olmayan kullanıcının doğrudan adresle konuşmayı görememesi, 390 px'te liste/konuşma geçişi ve yatay taşma olmaması.
 - Ortam notu F8-02 ile aynı: Playwright tarayıcısı bu konteynerde yalnız yerel `PLAYWRIGHT_BROWSERS_PATH` bağlantısıyla çalıştırıldı; repoda değişiklik yok.
+
+## F8-04 teslimatı
+
+### Kullanım
+
+1. Yazma alanındaki **Dosya ekle** düğmesiyle, sürükle-bırakla veya panodan yapıştırarak bir mesaja en fazla 5 dosya eklenir (her biri en fazla 20 MB). Dosya hemen yüklenir, taranır ve “Eklenecek dosyalar” listesinde görünür; gönderilene kadar yalnız yükleyen görür ve **Kaldır** ile çıkarabilir. Yalnız dosyadan oluşan mesaj gönderilebilir.
+2. Gönderilen dosyalar mesajın altında görünür: görseller küçük resim, diğerleri tür etiketi, ad ve boyutla. Tıklamak dosyayı indirir. Taranmakta olan, zararlı bulunan veya taranamayan dosya bağlantısız gösterilir ve nedeni yazar; açık konuşma yenilendikçe durum güncellenir.
+3. **Dosyalar** bölümü (Mesajlar'da) ve **Paylaşılan dosyalar** (kayıt sayfalarındaki Konuşma bölümünde) konuşmada paylaşılan tüm dosyaları yükleyen ve tarihle listeler.
+
+### Kurallar
+
+- Kabul edilen türler: PDF, PNG, JPEG, DOCX, XLSX, PPTX, CSV, TXT (F8-01 kararı; ZIP yok). Tür içerikten belirlenir: PDF/PNG/JPEG imzası; Office dosyalarında ZIP merkez dizini ve `[Content_Types].xml` okunur (boyut sınırlı); CSV/TXT geçerli UTF-8 ve ikili kontrol karakteri içermeyen metin olmalıdır. Uzantı içerikle uyuşmalıdır; yeniden adlandırılmış dosya reddedilir. Makro (`vbaProject.bin`, `macroEnabled`), şifreli ve ZIP64 Office dosyaları reddedilir.
+- Tarama `clamd` INSTREAM protokolüyle yapılır; ayrıntılar `docs/operations.md` “Dosya taraması”. İndirme yalnız `CLEAN` dosyada açıktır (geliştirmede `UNSCANNED` da; production'da hiçbir zaman).
+- Erişim konuşma erişimini izler: gönderilmiş dosyayı konuşmayı görebilen herkes indirir; kayıt konuşmasında paylaşım kalkınca dosya da kapanır. Yazma yetkisi olmayan dosya yükleyemez.
+- Bir dosya yalnız yükleyen tarafından, yalnız kendi konuşmasındaki bir mesaja ve bir kez bağlanır; aynı istek anahtarıyla tekrar gönderim aynı mesajı döner, ek listesi farklıysa 409 verir. PostgreSQL tetikleyicisi bağlı dosyanın kimliğini (ad, tür, boyut, depolama anahtarı, mesaj) değişmez kılar, bağlı dosyanın silinmesini ve zararlı dosyanın serbest bırakılmasını engeller.
+- İndirme `Content-Disposition: attachment` (yalnız görseller `?inline=1` ile küçük resim için satır içi), `nosniff` ve `sandbox` CSP ile döner. Dosyalar teklif PDF'leri ve bilgi bankasıyla aynı içerik-hash'li özel klasörde saklanır; silme yalnız hiçbir kayıt (teklif, bilgi kartı, mesaj eki) aynı dosyayı kullanmıyorsa yapılır.
+- Yedekleme betiği mesaj eklerini kapsar. Aynı değişiklikle betiğin yalnız `.pdf` anahtarı kabul eden kontrolü düzeltildi: bu kontrol Faz 6'dan beri PNG/JPEG bilgi bankası ekleri olan bir veritabanında yedeği “Unsafe artifact key” hatasıyla durdururdu.
+
+### Doğrulama (30 Ekim 2026)
+
+- Lint, TypeScript, birim/smoke testleri ve üretim derlemesi geçti.
+- 62 PostgreSQL entegrasyon kontrolü geçti (Faz 8 dosyaları için 9 yeni): üretimde tarayıcı zorunluluğu; tür tespiti (yeniden adlandırma, makro, gizli makro, düz ZIP, ikili `.txt`, bozuk dosya); taslak gizliliği ve gönderim sonrası erişim/başlıklar; tek bağlama, başkasının/başka konuşmanın dosyası, 5 dosya sınırı; boyut/ad/izin doğrulaması; zararlı yüklemenin diske yazılmadan reddi ve denetim kaydı; tarayıcı kesintisinde engelli kalma, 5 denemede `FAILED`, kesinti sonrası temiz dosyanın açılması ve zararlı dosyanın karantinaya alınıp diskten silinmesi; kayıt konuşmasında paylaşım iptaliyle dosyaya erişimin kapanması; taslak temizliği ve DB tetikleyicileri.
+- Entegrasyon testleri iki kez çalıştırıldı: (1) bu konteynere kurulan **gerçek ClamAV 1.5.4 `clamd`** ile — resmî imza veritabanı ağ politikası nedeniyle indirilemediğinden yalnız EICAR test dosyasını tanıyan yerel bir imza dosyasıyla; (2) `CLAMD_HOST` verilmediğinde testin kendi başlattığı INSTREAM protokolü taklidiyle (CI yolu). Gerçek imza veritabanıyla tespit kapasitesi burada doğrulanmadı.
+- 4 Playwright senaryosu geçti; mesajlaşma senaryosu PDF ve görsel eklemeyi, karşı tarafın PDF'yi indirip içeriğini doğrulamasını (Türkçe dosya adı korunarak), görselin küçük resim olarak yüklenmesini, Dosyalar listesini ve desteklenmeyen dosyanın hata mesajını kapsar.
+- Ortam notları: (a) Bu konteynerde `LANG` tanımsız olduğundan başsız Chromium, ASCII dışı `filename*` adlarını “download” olarak kaydediyordu; ayrı bir deneyle sunucu başlıklarının doğru olduğu ve `LANG=C.UTF-8` ile adın doğru geldiği gösterildi, E2E bu ayarla çalıştırıldı. (b) Yedekleme betiği Docker Compose gerektirdiği ve konteynerde Docker olmadığı için yedek tatbikatı çalıştırılamadı; yalnız betiğin referans sorgusu güncel şemada denendi. Tatbikat Docker'lı ortamda tekrarlanmalıdır. (c) `deploy/compose.production.yml` ClamAV servisi ve sağlık kontrolü burada çalıştırılmadı.
 
 ## Kabul kriterleri
 

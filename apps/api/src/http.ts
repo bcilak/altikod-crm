@@ -11,7 +11,7 @@ class ApiExceptionFilter implements ExceptionFilter {
     const prismaCode = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined;
     const status = error instanceof HttpException ? error.getStatus() : prismaCode === 'P2025' ? 404 : ['P2002', 'P2034', 'P2003'].includes(prismaCode ?? '') ? 409 : 500;
     response.status(status).json({ error: {
-      code: ({ 400: 'BAD_REQUEST', 401: 'UNAUTHORIZED', 403: 'FORBIDDEN', 404: 'NOT_FOUND', 409: 'CONFLICT', 429: 'RATE_LIMITED', 503: 'SERVICE_UNAVAILABLE' } as Record<number, string>)[status] ?? 'INTERNAL_ERROR',
+      code: ({ 400: 'BAD_REQUEST', 401: 'UNAUTHORIZED', 403: 'FORBIDDEN', 404: 'NOT_FOUND', 409: 'CONFLICT', 413: 'PAYLOAD_TOO_LARGE', 429: 'RATE_LIMITED', 503: 'SERVICE_UNAVAILABLE' } as Record<number, string>)[status] ?? 'INTERNAL_ERROR',
       // Deliberate 503s carry user-facing text; unexpected 500s and database errors never expose details.
       message: error instanceof HttpException && status !== 500 ? error.message : status >= 500 ? 'Service temporarily unavailable' : 'Request failed',
       requestId: response.getHeader('X-Request-Id'),
@@ -21,8 +21,9 @@ class ApiExceptionFilter implements ExceptionFilter {
 
 export function configureApp(app: INestApplication, exposeDocs = true) {
   app.setGlobalPrefix('api/v1');
-  // Knowledge attachments arrive as raw bytes; the service enforces the 5 MB limit with a clear message.
+  // Knowledge and message attachments arrive as raw bytes; the services enforce the 5 MB / 20 MB limits with a clear message.
   app.use(/^\/api\/v1\/knowledge\/[^/]+\/attachments$/, raw({ type: 'application/octet-stream', limit: '6mb' }));
+  app.use(/^\/api\/v1\/messaging\/conversations\/[^/]+\/attachments$/, raw({ type: 'application/octet-stream', limit: '21mb' }));
   app.use((req: Request, res: Response, next: NextFunction) => {
     res.setHeader('X-Request-Id', randomUUID());
     res.setHeader('X-Content-Type-Options', 'nosniff');

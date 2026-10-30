@@ -10,7 +10,7 @@ Doğrulama: `npm.cmd run check`, `npm.cmd run test:integration -- --backup-drill
 
 Docker Compose PostgreSQL çalışıyor olmalı. `MIGRATION_DATABASE_URL` (yoksa `DATABASE_URL`) sahip hesabıyla kaynak DB'yi, `PRIVATE_FILES_DIR` PDF dizinini belirler. Güvenli bir sır yöneticisinde oluşturulmuş/saklanmış 32-byte hex `BACKUP_KEY` ortam değişkeni gerekir. Anahtarı Git'e, komut satırına veya yedek dosyasının yanına yazmayın. Anahtar kaybı yedeği kullanılamaz yapar.
 
-- `npm.cmd run backup:create`: tutarlı pg_dump ile referanslı teklif PDF'lerini ve bilgi bankası dosyalarını AES-256-GCM ile `.backups` içine yazar. PDF'ler eklemeli ve değişmez olduğundan dump sonrasında alınan dosya listesi snapshot'ın referanslarını kapsar.
+- `npm.cmd run backup:create`: tutarlı pg_dump ile referanslı teklif PDF'lerini, bilgi bankası dosyalarını ve mesaj eklerini (zararlı bulunup silinenler hariç) AES-256-GCM ile `.backups` içine yazar. PDF'ler eklemeli ve değişmez olduğundan dump sonrasında alınan dosya listesi snapshot'ın referanslarını kapsar.
 - `npm.cmd run backup:verify -- <mutlak-yedek-yolu>`: kimliği doğrulanmış arşivi yeni geçici DB'ye ve yeni geçici dosya klasörüne geri yükler, migration ve DB/dosya SHA-256 eşleşmesini kontrol eder, yalnız kendi oluşturduğu test hedeflerini kaldırır.
 - `npm.cmd run backup:recover -- <mutlak-yedek-yolu>`: aynı doğrulamayı yapar, başarılı kurtarma DB'sini ve dosya klasörünü tutar; isim/yolu çıktı olarak verir. Mevcut DB veya dosyaları ezmez, uygulama bağlantısını değiştirmez. Bu komutun kalıcı kurtarma yolu henüz ayrıca operasyonel pilotta denenmemiştir; `verify` yolu yerelde test edildi.
 - `npm.cmd run backup:drill`: geçici anahtarla create/verify tatbikatı. Anahtarı saklamaz; çıktısı kalıcı kurtarma yedeği değildir.
@@ -35,6 +35,14 @@ Olay kurtarmasında yazıları bakım moduyla durdurun, mevcut durumu ayrıca ye
 ### E-posta (SMTP)
 
 Production'da `MAIL_TRANSPORT=smtp` zorunludur; API eksik veya şifresiz SMTP ayarıyla başlamaz (hata yalnız alan adlarını gösterir, değerleri göstermez). Gerekenler: `SMTP_HOST`, `SMTP_PORT` (varsayılan 587), `SMTP_SECURITY` (`starttls` varsayılan, `tls` 465 için), isteğe bağlı `SMTP_USER`/`SMTP_PASSWORD` (birlikte), `MAIL_FROM` (ör. `Altıkod CRM <crm@altikod.com>`). Sağlayıcıdan bağımsızdır (Google Workspace, Microsoft 365, Yandex, kurumsal relay vb.). Gönderen alan adı için SPF, DKIM ve DMARC kayıtları sağlayıcının rehberine göre yapılmalıdır; bu kayıtlar ve gerçek teslim yerelde doğrulanmadı. URL tek kullanımlık token taşıdığından e-posta içeriği loglanmaz; başarısız sıfırlama gönderimi yalnız `mail_delivery_failed` olayı olarak loglanır.
+
+### Dosya taraması (ClamAV)
+
+Mesajlarda paylaşılan her dosya indirilebilir olmadan önce ClamAV ile taranır. Production'da `MALWARE_SCANNER=clamd` ve `CLAMD_HOST` zorunludur; API bunlar olmadan başlamaz. `deploy/compose.production.yml` `clamav/clamav:1.4` servisini (imza veritabanı `clamav-db` volume'ünde) başlatır ve API'yi bu servis sağlıklı olana kadar bekletir. ClamAV yaklaşık 1,5–2 GB bellek ister; ilk açılışta imzaları indirdiği için birkaç dakika sürer; imzalar container içinde `freshclam` ile güncellenir. İmza güncelliği ve bellek alarmı izlemeye bağlanmalıdır.
+
+Akış: dosya önce bellekte taranır; zararlı bulunursa diske yazılmaz, yükleme reddedilir ve `MALWARE_BLOCKED` denetim kaydı düşer. ClamAV'a ulaşılamazsa dosya “taranıyor” durumunda saklanır ve indirilemez; API 30 saniyede bir yeniden dener, 5 denemeden sonra “tarama tamamlanamadı” durumuna alır (indirme kapalı kalır). Yeniden taramada zararlı çıkan dosya diskten silinir ve `MALWARE_DETECTED` kaydı düşer. Gönderilmemiş taslak ekler 24 saat sonra silinir. Geliştirmede `MALWARE_SCANNER=none` dosyaları “taranmadı” işaretler (asla “temiz” değil); yerelde gerçek tarama için `docker compose --profile scan up -d clamav`.
+
+Sınırlar: tarama yalnız ClamAV imzalarının tanıdığı içerikleri yakalar; parola korumalı/şifreli Office dosyaları ve ZIP kabul edilmez, makro içeren Office dosyaları reddedilir. Bu, dosyanın güvenli olduğunun garantisi değildir.
 
 API `/api/v1/health` süreç, `/api/v1/ready` DB hazır olma kontrolüdür. Üretimde loglar requestId, route şablonu, durum ve süre içerir; gövde, cookie ve query parametrelerini kaydetmez. İzleme, log saklama ve alarm hedefleri ayrıca bağlanmalıdır.
 

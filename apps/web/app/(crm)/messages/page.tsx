@@ -5,7 +5,7 @@ import { Suspense, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type Me } from '../../../lib/api';
 import { conversationKindLabels, conversationsKey, displayName, listInterval, recordLabels, recordPath, roleLabels, type Colleague, type Conversation, type ConversationDetail, type ConversationKind, type ConversationList } from '../../../lib/messaging';
-import { MessageStream } from '../../../components/conversation';
+import { ConversationFiles, MessageStream } from '../../../components/conversation';
 import { Action, Badge, Editor, Loading, Notice, Title, useData, useMe } from '../../../components/ui';
 
 const sections: { kind: ConversationKind; title: string; empty: string }[] = [
@@ -79,6 +79,7 @@ function ActiveConversation({ id, me, close }: { id: string; me: Me; close: () =
     {c.kind === 'CHANNEL' && !c.joined && !c.archivedAt && <div className="notice">Bu kanalı okuyabilirsiniz. Yazmak ve okunmamış sayısını görmek için katılın. <Action run={async () => { await api(`/messaging/conversations/${c.id}/join`, 'POST'); await cache.invalidateQueries(); }}>Kanala katıl</Action></div>}
     {blocked && <p className="notice">{blocked}</p>}
     <MessageStream key={c.id} conversationId={c.id} meId={me.id} canPost={c.canPost} />
+    <Editor title="Dosyalar"><ConversationFiles conversationId={c.id} /></Editor>
     <ConversationInfo c={c} me={me} leave={async () => { await api(`/messaging/conversations/${c.id}/leave`, 'POST'); close(); }} />
   </section>;
 }

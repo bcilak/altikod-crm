@@ -1,6 +1,6 @@
 # IT SalesHub — Uygulama yol haritası
 
-Tarih: 30 Ekim 2026. Durum: Faz 0–4 ve Faz 6 uygulandı ve yerelde doğrulandı (`docs/phase-6.md`); Faz 7 ürün sahibi kararıyla kapsam dışı. Faz 8 (ekip içi mesajlaşma ve belge paylaşımı): kararlar varsayılanlarla kabul edildi, F8-02…F8-06 yazılımı uygulandı (mesajlaşma, dosyalar ve ClamAV, canlı akış, bahsetme/bildirim, düzenleme/silme/moderasyon/sabitleme/sessize alma/arama/saklama/bilgi bankası önerisi); gerçek kullanıcı pilotu (F8-07) ve ön koşulları açık — `docs/pilot-messaging.md` — `docs/phase-8-team-messaging.md`. Faz 5 yazılımı uygulandı; SMTP adaptörü ve en az yetkili DB rolü eklendi. Gerçek pilot ve canlı geçiş kapıları açık. Güncel kayıt: `docs/phases-4-5.md`. Güncel teslimat kaydı `docs/phases-1-3.md`; Faz 0 tarihsel kaydı `docs/phase-0-status.md`. Kaynak plan korunmuştur. Faz 1–3 yetki ve akış varsayımları kodda uygulanmıştır; teklif ve canlıya çıkış kararları ilgili faz öncesi kesinleştirilir.
+Tarih: 30 Ekim 2026. Durum: Faz 0–4 ve Faz 6 uygulandı ve yerelde doğrulandı (`docs/phase-6.md`); Faz 7 ürün sahibi kararıyla kapsam dışı. Faz 9 (telefon bildirimleri, tepkiler, iPhone/Android uygulaması) uygulandı; canlıya geçiş listesi `docs/go-live-checklist.md`. Faz 8 (ekip içi mesajlaşma ve belge paylaşımı): kararlar varsayılanlarla kabul edildi, F8-02…F8-06 yazılımı uygulandı (mesajlaşma, dosyalar ve ClamAV, canlı akış, bahsetme/bildirim, düzenleme/silme/moderasyon/sabitleme/sessize alma/arama/saklama/bilgi bankası önerisi); gerçek kullanıcı pilotu (F8-07) ve ön koşulları açık — `docs/pilot-messaging.md` — `docs/phase-8-team-messaging.md`. Faz 5 yazılımı uygulandı; SMTP adaptörü ve en az yetkili DB rolü eklendi. Gerçek pilot ve canlı geçiş kapıları açık. Güncel kayıt: `docs/phases-4-5.md`. Güncel teslimat kaydı `docs/phases-1-3.md`; Faz 0 tarihsel kaydı `docs/phase-0-status.md`. Kaynak plan korunmuştur. Faz 1–3 yetki ve akış varsayımları kodda uygulanmıştır; teklif ve canlıya çıkış kararları ilgili faz öncesi kesinleştirilir.
 
 ## MVP sınırı
 
@@ -23,6 +23,7 @@ MVP dışı: akademi, kapsamlı bilgi yayın sistemi ve proje yönetimi, e-posta
 | 6 | Bilgi bankası, akademi, proje teslimatı | 5 | Onaylı içerik ve eğitim ilerlemesi; tek fırsata tek proje |
 | 7 | İhtiyaca göre entegrasyonlar, ardından AI — **kapsam dışı (ürün sahibi kararı)** | 6 | — |
 | 8 | Ekip içi mesajlaşma: kanal, grup, birebir, kayıt konuşması, dosya paylaşımı — **yazılım tamam (F8-02…06); pilot (F8-07) açık** | 6 | Kayıt kapsamı mesaj/dosya/arama/canlı akışta korunur; dosya taraması; pilot ekip WhatsApp yerine kullanır |
+| 9 | Telefon/bilgisayar bildirimleri (Web Push), mesaj tepkileri, iPhone/Android ana ekran uygulaması — **yazılım tamam; gerçek cihaz testi açık** | 8 | Gerçek iPhone ve Android'de kurulum, izin, bildirim ve tıklama doğrulanır; `docs/go-live-checklist.md` |
 
 Süre tahmini, Faz 0 doğrulaması ve ekip kapasitesi görüldükten sonra yapılacak. Her iş küçük, gözden geçirilebilir bir teslimat olmalı.
 
@@ -51,6 +52,7 @@ Süre tahmini, Faz 0 doğrulaması ve ekip kapasitesi görüldükten sonra yapı
 - F8-05: SSE + PostgreSQL LISTEN/NOTIFY canlı akış, @bahsetme, bahsetme/birebir/yanıt bildirimleri, yeniden bağlanma — uygulandı; entegrasyon ve Playwright testleriyle doğrulandı.
 - F8-06: Düzenleme geçmişi (DB tetikleyicisi), yumuşak silme, gerekçeli moderasyon, sabitleme, sessize alma, Türkçe tam metin arama, saklama işi, “Bilgi bankasına öner” — uygulandı; entegrasyon ve Playwright testleriyle doğrulandı.
 - F8-07: Otomatik testler ve 390 px mobil kontrol yapıldı. Gerçek ekiple pilot yapılmadı; plan ve kayıt şablonu `docs/pilot-messaging.md`. Hukuki talep için özel yazışma dışa aktarımı hukuki görüş beklediği için uygulanmadı.
+- F9: Web Push (VAPID, şifreli içerik, izin listeli servisler, cihaz başına önizleme, tam bir kez gönderim), tepkiler, PWA manifesti/simgeler/service worker, iPhone güvenli alanları ve ana ekran rehberi — uygulandı; entegrasyon ve Playwright testleriyle doğrulandı. Gerçek cihaz ve üretim alan adı testi açık: `docs/phase-9-mobile.md`, `docs/go-live-checklist.md`.
 
 ## Faz başlamadan kesinleştirilecek iş kararları
 

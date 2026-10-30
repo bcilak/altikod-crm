@@ -36,6 +36,8 @@ export class AuthService {
   async logout(actor: Actor) {
     await this.prisma.$transaction(async db => {
       await db.session.update({ where: { id: actor.sessionId }, data: { revokedAt: new Date() } });
+      // Signing out of a device also stops its phone notifications.
+      await db.pushSubscription.deleteMany({ where: { sessionId: actor.sessionId } });
       await audit(db, actor.id, 'LOGOUT', 'auth');
     });
     return { ok: true };
@@ -79,6 +81,7 @@ export class AuthService {
       if (claim.count !== 1) throw new ConflictException('Bağlantı zaten kullanılmış');
       await db.user.update({ where: { id: token.userId }, data: { passwordHash: hash } });
       await db.session.updateMany({ where: { userId: token.userId, revokedAt: null }, data: { revokedAt: new Date() } });
+      await db.pushSubscription.deleteMany({ where: { userId: token.userId } });
       await db.authToken.updateMany({ where: { userId: token.userId, usedAt: null }, data: { usedAt: new Date() } });
       await audit(db, token.userId, `${kind}_COMPLETE`, 'auth');
     });
@@ -92,7 +95,7 @@ export class AuthService {
       const previous = await db.user.findUniqueOrThrow({ where: { id } });
       if (previous.role === 'ADMIN' && previous.isActive && (input.isActive === false || input.role && input.role !== 'ADMIN') && await db.user.count({ where: { role: 'ADMIN', isActive: true } }) <= 1) throw new BadRequestException('Son aktif yönetici kaldırılamaz');
       const user = await db.user.update({ where: { id }, data: input, select: publicUser });
-      if (input.isActive === false) await db.session.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+      if (input.isActive === false) { await db.session.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } }); await db.pushSubscription.deleteMany({ where: { userId: id } }); }
       await audit(db, actor.id, 'USER_UPDATE', 'user', id, { role: user.role, isActive: user.isActive });
       return user;
     });

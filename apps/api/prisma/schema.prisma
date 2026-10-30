@@ -64,6 +64,8 @@ model User {
   messages Message[]
   messageAttachments MessageAttachment[]
   messageMentions MessageMention[]
+  messageReactions MessageReaction[]
+  pushSubscriptions PushSubscription[]
 }
 model RolePermission {
   role     Role
@@ -292,6 +294,7 @@ model Notification {
   messageId    String? @db.Uuid
   message      Message? @relation(fields: [messageId], references: [id], onDelete: Restrict)
   type         String
+  pushClaimedAt DateTime? @db.Timestamptz(6)
   dedupeKey    String @unique
   readAt       DateTime? @db.Timestamptz(6)
   createdAt    DateTime @default(now()) @db.Timestamptz(6)
@@ -724,6 +727,7 @@ model Message {
   pinnedById     String?      @db.Uuid
   expiredAt      DateTime?    @db.Timestamptz(6)
   revisions      MessageRevision[]
+  reactions      MessageReaction[]
 
   @@unique([conversationId, seq])
   @@unique([authorId, clientNonce])
@@ -784,4 +788,35 @@ model MessageRevision {
   body String
   createdAt DateTime @db.Timestamptz(6)
   @@index([messageId, createdAt])
+}
+
+// Faz 9: phone notifications and reactions.
+/** A browser/installed-app push endpoint. Bound to the user and device, not to the 8-hour session, so phones keep ringing;
+ *  removed on logout from that device, on password reset and on deactivation. */
+model PushSubscription {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  sessionId String? @db.Uuid
+  endpoint String @unique
+  p256dh String
+  auth String
+  label String
+  showPreview Boolean @default(false)
+  failures Int @default(0)
+  lastSuccessAt DateTime? @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  @@index([userId])
+  @@index([sessionId])
+}
+model MessageReaction {
+  messageId String @db.Uuid
+  message Message @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  userId String @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  emoji String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  @@id([messageId, userId, emoji])
+  @@index([messageId])
 }

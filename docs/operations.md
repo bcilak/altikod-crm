@@ -40,6 +40,10 @@ Production'da `MAIL_TRANSPORT=smtp` zorunludur; API eksik veya şifresiz SMTP ay
 
 `GET /api/v1/messaging/stream` uzun ömürlü bir HTTP yanıtıdır. Her API süreci veritabanına mesajlaşma sinyalleri için bir ek `LISTEN` bağlantısı açar (bağlantı havuzu planlanırken hesaba katın). Ters vekil bu yolu tamponlamamalı ve kısa okuma zaman aşımı uygulamamalıdır; yanıt `Cache-Control: no-store, no-transform` ve `X-Accel-Buffering: no` taşır, sunucu 25 saniyede bir yorum satırıyla bağlantıyı canlı tutar. Caddy'nin mevcut yapılandırması yerelde 2.6.2 ile doğrulandı. Akış kullanılamazsa web arayüzü kısa aralıklı yenilemeye düşer; işlev kaybı olmaz, yalnız gecikme artar.
 
+### Telefon bildirimleri (Web Push)
+
+Production'da `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, `WEB_PUSH_SUBJECT` (ör. `mailto:it@altikod.com`) zorunludur; `npm run push:keys` ile **bir kez** üretilip sır deposunda tutulur. Anahtar değişirse tüm cihazların bildirimleri yeniden açması gerekir; rotasyon planlı yapılmalı ve kullanıcılara duyurulmalıdır. API, bildirimleri Apple/Google/Mozilla/Microsoft servislerine HTTPS ile gönderir; bu hostlara çıkış izni gerekir (liste: `deploy/compose.production.yml`). iPhone'da bildirim yalnız HTTPS alan adında ve “Ana Ekrana Ekle” ile açılan uygulamada çalışır (iOS 16.4+). Gönderim hataları cihazı 10 denemeden sonra, 404/410'da hemen siler; uygulama içi bildirim etkilenmez. `sw.js` önbelleksiz sunulur; yeni sürüm cihazlara bir sonraki açılışta ulaşır.
+
 ### Mesaj saklama
 
 `MESSAGE_RETENTION_DAYS` (varsayılan 730) kanal, grup ve birebir mesajların saklama süresidir; API 6 saatte bir süresi dolanların metnini, düzenleme geçmişini ve dosyalarını siler, yerinde iz bırakır ve `MESSAGE_RETENTION` denetim kaydı yazar. Firma/fırsat/proje konuşmaları kayıtla birlikte saklanır. Süre kısaltılırsa sonraki çalıştırmada geriye dönük uygulanır ve geri alınamaz; değişiklik ürün sahibi ve hukuk onayıyla yapılmalıdır. Yedekler kendi saklama politikalarına tabidir: silinen mesaj, onu içeren eski yedekte durur.

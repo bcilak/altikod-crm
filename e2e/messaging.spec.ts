@@ -110,6 +110,11 @@ test('team messaging: channel, direct message, thread, unread badge, record conv
   await sales.getByRole('button', { name: 'Yanıtla' }).first().click();
   await sales.getByLabel('Yanıt yaz').fill('Bakıyorum, öğleden sonra dönerim.'); await sales.getByLabel('Yanıt yaz').press('Enter');
   await expect(sales.getByRole('log', { name: 'Yanıtlar' }).getByText('Bakıyorum, öğleden sonra dönerim.')).toBeVisible();
+  // Reactions: the colleague taps 👍 on the admin's message; the admin's open page shows it live.
+  const asked = sales.getByRole('log', { name: 'Mesajlar' }).locator('li.message').filter({ hasText: 'Teklif taslağına bakabilir misin?' });
+  await asked.getByLabel('Tepki ekle').first().click(); await asked.getByRole('button', { name: 'Beğendim' }).first().click();
+  await expect(asked.getByRole('button', { name: /Beğendim: 1 kişi \(E2E Satış Uzmanı\), sizinki/ }).first()).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('log', { name: 'Mesajlar' }).getByRole('button', { name: /Beğendim: 1 kişi \(E2E Satış Uzmanı\)$/ })).toBeVisible({ timeout: 5_000 });
   // Live update: the reply reaches the other open page well inside the 60 s safety-net poll.
   await expect(page.getByRole('button', { name: '1 yanıt' })).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText('canlı bağlantı yok')).toHaveCount(0);

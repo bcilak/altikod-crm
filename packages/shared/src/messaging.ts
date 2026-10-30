@@ -21,6 +21,8 @@ export const messageAttachmentsPerMessage = 5;
 export const messageMentionsPerMessage = 20;
 export const messageEditWindowMs = 15 * 60_000;
 export const messagePinsPerConversation = 20;
+/** Fixed reaction set (also a database constraint). */
+export const messageReactions = [['👍', 'Beğendim'], ['✅', 'Tamam'], ['❤️', 'Kalp'], ['😂', 'Güldüm'], ['👀', 'Bakıyorum'], ['🙏', 'Teşekkürler']] as const;
 export const messageStateLabels: Record<string, string> = { DELETED: 'Bu mesaj silindi.', HIDDEN: 'Bu mesaj bir yönetici tarafından gizlendi.', EXPIRED: 'Saklama süresi dolduğu için kaldırıldı.' };
 export const messageNotificationLabels: Record<string, string> = { MESSAGE_MENTION: 'Sizden bahsedildi', MESSAGE_DIRECT: 'Yeni birebir mesaj', MESSAGE_REPLY: 'Mesaj dizinize yanıt geldi' };
 export const attachmentScanLabels: Record<string, string> = { PENDING: 'Güvenlik taraması sürüyor', CLEAN: 'Tarandı', INFECTED: 'Zararlı içerik tespit edildi; indirilemez', FAILED: 'Tarama tamamlanamadı; indirilemez', UNSCANNED: 'Taranmadı (yalnız geliştirme ortamı)' };
@@ -52,4 +54,9 @@ export const messageHideSchema = z.object({ reason: z.string().trim().min(3).max
 /** null unmutes; a far-future date is “until I unmute”. */
 export const conversationMuteSchema = z.object({ until: dateTime.nullable() }).strict();
 export const messageSearchSchema = z.object({ q: z.string().trim().min(2).max(100), conversationId: uuid.optional() }).strict();
+export const messageReactionSchema = z.object({ emoji: z.enum(messageReactions.map(r => r[0]) as [string, ...string[]]) }).strict();
+const base64url = (min: number, max: number) => z.string().regex(new RegExp(`^[A-Za-z0-9_-]{${min},${max}}={0,2}$`));
+/** PushSubscription.toJSON() from the browser. */
+export const pushSubscriptionSchema = z.object({ endpoint: z.string().url().max(1000), expirationTime: z.number().nullable().optional(), keys: z.object({ p256dh: base64url(80, 100), auth: base64url(16, 30) }).strict() }).strict();
+export const pushPreferenceSchema = z.object({ showPreview: z.boolean() }).strict();
 export const messageKnowledgeSchema = z.object({ title: z.string().trim().min(1).max(200), category: z.string().trim().min(1).max(100) }).strict();

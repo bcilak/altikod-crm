@@ -30,7 +30,9 @@ import { MessageAttachmentsService } from './messaging/attachments.service';
 import { MessagingStream } from './messaging/stream.service';
 import { MessageLifecycleService } from './messaging/lifecycle.service';
 import { MessageRetentionService } from './messaging/retention.service';
+import { PushController } from './push/push.controller';
+import { PushService } from './push/push.service';
 import { createScanner, MalwareScanner } from './messaging/scanner';
 
-@Module({ controllers: [HealthController, AuthController, UsersController, CompaniesController, OpportunitiesController, WorkController, AuditController, SalesController, ProjectsController, KnowledgeController, AcademyController, MessagingController], providers: [PrismaService, AuthService, { provide: Mailer, useFactory: () => createMailer() }, CompaniesService, OpportunitiesService, WorkService, OutboxService, CatalogService, QuotesService, FilesService, OperationsService, SalesJobs, ProjectsService, KnowledgeService, AcademyService, MessagingService, MessageAttachmentsService, MessagingStream, MessageLifecycleService, MessageRetentionService, { provide: MalwareScanner, useFactory: () => createScanner() }, { provide: APP_GUARD, useClass: AccessGuard }] })
+@Module({ controllers: [HealthController, AuthController, UsersController, CompaniesController, OpportunitiesController, WorkController, AuditController, SalesController, ProjectsController, KnowledgeController, AcademyController, MessagingController, PushController], providers: [PrismaService, AuthService, { provide: Mailer, useFactory: () => createMailer() }, CompaniesService, OpportunitiesService, WorkService, OutboxService, CatalogService, QuotesService, FilesService, OperationsService, SalesJobs, ProjectsService, KnowledgeService, AcademyService, MessagingService, MessageAttachmentsService, MessagingStream, MessageLifecycleService, MessageRetentionService, PushService, { provide: MalwareScanner, useFactory: () => createScanner() }, { provide: APP_GUARD, useClass: AccessGuard }] })
 export class AppModule {}

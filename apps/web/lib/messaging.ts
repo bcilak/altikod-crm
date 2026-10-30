@@ -1,4 +1,4 @@
-export { attachmentScanLabels, conversationKindLabels, messageAttachmentAccept, messageAttachmentMaxBytes, messageAttachmentsPerMessage, messageEditWindowMs, messageMaxLength, messageStateLabels } from '@saleshub/shared';
+export { messageReactions, attachmentScanLabels, conversationKindLabels, messageAttachmentAccept, messageAttachmentMaxBytes, messageAttachmentsPerMessage, messageEditWindowMs, messageMaxLength, messageStateLabels } from '@saleshub/shared';
 
 export type ConversationKind = 'CHANNEL' | 'GROUP' | 'DIRECT' | 'RECORD';
 export type RecordType = 'COMPANY' | 'OPPORTUNITY' | 'PROJECT';
@@ -11,7 +11,8 @@ export type Attachment = { id: string; name: string; mimeType: string; size: num
 export type SharedFile = Attachment & { createdAt: string; uploadedBy: { id: string; name: string }; message: { id: string; seq: number; parentId: string | null } };
 export type Mention = { id: string; name: string };
 export type Message = { id: string; seq: number; parentId: string | null; body: string; createdAt: string; author: Author; replyCount: number; attachments: Attachment[]; mentions: Mention[];
-  state: 'ACTIVE' | 'DELETED' | 'HIDDEN' | 'EXPIRED'; editedAt: string | null; pinnedAt: string | null; hiddenReason: string | null };
+  state: 'ACTIVE' | 'DELETED' | 'HIDDEN' | 'EXPIRED'; editedAt: string | null; pinnedAt: string | null; hiddenReason: string | null; reactions: Reaction[] };
+export type Reaction = { emoji: string; count: number; mine: boolean; names: string[] };
 export type SearchHit = { message: Message; conversation: { id: string; kind: ConversationKind; name: string | null; record: Conversation['record'] } };
 /** The server re-checks scan state on every download; this only decides whether to offer a link. */
 export const downloadable = (a: Attachment) => a.scanStatus === 'CLEAN' || a.scanStatus === 'UNSCANNED';

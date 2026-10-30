@@ -7,7 +7,7 @@ import { Actor } from '../security/access';
 import { conversationScope } from './messaging.service';
 
 type Subscriber = { actor: Actor; res: Response };
-type Signal = { type: 'message'; conversationId: string; seq: number } | { type: 'attachment' | 'update'; conversationId: string } | { type: 'notification'; userId: string };
+export type Signal = { type: 'message'; conversationId: string; seq: number } | { type: 'attachment' | 'update'; conversationId: string } | { type: 'notification'; userId: string; notificationId?: string };
 const channel = 'saleshub_messaging';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -15,7 +15,7 @@ function parse(payload: string | undefined): Signal | undefined {
   try {
     const value = JSON.parse(payload ?? '') as Record<string, unknown>;
     if ((value.type === 'message' || value.type === 'attachment' || value.type === 'update') && typeof value.conversationId === 'string' && uuid.test(value.conversationId)) return value.type === 'message' ? { type: 'message', conversationId: value.conversationId, seq: Number(value.seq) } : { type: value.type, conversationId: value.conversationId };
-    if (value.type === 'notification' && typeof value.userId === 'string' && uuid.test(value.userId)) return { type: 'notification', userId: value.userId };
+    if (value.type === 'notification' && typeof value.userId === 'string' && uuid.test(value.userId)) return { type: 'notification', userId: value.userId, ...(typeof value.notificationId === 'string' && uuid.test(value.notificationId) ? { notificationId: value.notificationId } : {}) };
   } catch { /* ignore malformed signals */ }
   return undefined;
 }
@@ -30,6 +30,7 @@ function parse(payload: string | undefined): Signal | undefined {
 export class MessagingStream implements OnModuleDestroy {
   private readonly subscribers = new Set<Subscriber>();
   private listener?: Client; private connecting?: Promise<void>; private timer?: ReturnType<typeof setInterval>;
+  private readonly handlers: ((signal: Signal) => void)[] = []; private persistent = false; private retry?: ReturnType<typeof setTimeout>;
   heartbeatMs = 25_000;
   readonly perUser = 5; readonly total = 500;
   constructor(private readonly prisma: PrismaService) {}
@@ -50,6 +51,7 @@ export class MessagingStream implements OnModuleDestroy {
     this.timer.unref();
   }
   onModuleDestroy() {
+    this.persistent = false; if (this.retry) clearTimeout(this.retry);
     for (const s of this.subscribers) this.drop(s);
     void this.listener?.end().catch(() => undefined); this.listener = undefined;
   }
@@ -87,6 +89,18 @@ export class MessagingStream implements OnModuleDestroy {
     }
   }
   /** One shared LISTEN connection. If it drops, every stream is closed so browsers reconnect and refetch what they missed. */
+  /** Server-side consumers (phone push) receive every signal, independent of browser streams. */
+  onSignal(handler: (signal: Signal) => void) { this.handlers.push(handler); }
+  /** Keeps the LISTEN connection open even with no browser connected, reconnecting every 5 s after a loss. */
+  keepListening() {
+    this.persistent = true;
+    void this.listen().catch(() => this.retryLater());
+  }
+  private retryLater() {
+    if (!this.persistent || this.retry) return;
+    this.retry = setTimeout(() => { this.retry = undefined; void this.listen().catch(() => this.retryLater()); }, 5_000);
+    this.retry.unref();
+  }
   private listen() {
     if (this.listener) return Promise.resolve();
     this.connecting ??= (async () => {
@@ -95,9 +109,14 @@ export class MessagingStream implements OnModuleDestroy {
         if (this.listener !== client) return;
         this.listener = undefined; void client.end().catch(() => undefined);
         for (const s of [...this.subscribers]) this.drop(s);
+        this.retryLater();
       };
       client.on('error', lost); client.on('end', lost);
-      client.on('notification', message => { const signal = message.channel === channel ? parse(message.payload) : undefined; if (signal) void this.dispatch(signal).catch(() => undefined); });
+      client.on('notification', message => {
+        const signal = message.channel === channel ? parse(message.payload) : undefined; if (!signal) return;
+        for (const handler of this.handlers) handler(signal);
+        void this.dispatch(signal).catch(() => undefined);
+      });
       try { await client.connect(); await client.query(`LISTEN ${channel}`); }
       catch (error) { void client.end().catch(() => undefined); throw error; }
       this.listener = client;

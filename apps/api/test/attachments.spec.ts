@@ -17,6 +17,7 @@ import { MessageAttachmentsService } from '../src/messaging/attachments.service'
 import { detectMessageFile } from '../src/messaging/file-types';
 import { FilesService } from '../src/sales/files.service';
 import { parseEnv } from '../src/env';
+import webpush from 'web-push';
 
 type Session = { cookie: string; csrf: string; id: string };
 const origin = 'http://localhost:3000';
@@ -63,7 +64,8 @@ function fakeClamd(): Promise<Server> {
 }
 
 test('production refuses to start without a malware scanner', () => {
-  const base = { NODE_ENV: 'production', APP_ORIGIN: 'https://crm.example.invalid', DATABASE_URL: 'postgresql://u:p@localhost:5432/db', MAIL_TRANSPORT: 'smtp', SMTP_HOST: 'smtp.example.invalid', MAIL_FROM: 'CRM <crm@example.invalid>' };
+  const vapid = webpush.generateVAPIDKeys();
+  const base = { NODE_ENV: 'production', APP_ORIGIN: 'https://crm.example.invalid', DATABASE_URL: 'postgresql://u:p@localhost:5432/db', MAIL_TRANSPORT: 'smtp', SMTP_HOST: 'smtp.example.invalid', MAIL_FROM: 'CRM <crm@example.invalid>', WEB_PUSH_PUBLIC_KEY: vapid.publicKey, WEB_PUSH_PRIVATE_KEY: vapid.privateKey, WEB_PUSH_SUBJECT: 'mailto:crm@example.invalid' };
   assert.throws(() => parseEnv(base), /MALWARE_SCANNER/);
   assert.throws(() => parseEnv({ ...base, MALWARE_SCANNER: 'clamd' }), /CLAMD_HOST/);
   assert.equal(parseEnv({ ...base, MALWARE_SCANNER: 'clamd', CLAMD_HOST: 'clamav' }).CLAMD_PORT, 3310);

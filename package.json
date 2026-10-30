@@ -24,6 +24,7 @@
     "test": "npm run build -w @saleshub/shared && npm run test -w @saleshub/api",
     "test:integration": "npm run build -w @saleshub/shared && npm run build -w @saleshub/api && node --env-file-if-exists=.env scripts/integration.mjs",
     "test:e2e": "npm run build -w @saleshub/shared && npm run build -w @saleshub/api && node --env-file-if-exists=.env scripts/integration.mjs --browser",
+    "push:keys": "node -e \"const k=require('web-push').generateVAPIDKeys();console.log('WEB_PUSH_PUBLIC_KEY='+k.publicKey);console.log('WEB_PUSH_PRIVATE_KEY='+k.privateKey)\"",
     "db:generate": "npm run db:generate -w @saleshub/api",
     "db:migrate": "npm run db:migrate -w @saleshub/api",
     "check": "npm run lint && npm run typecheck && npm test && npm run build"

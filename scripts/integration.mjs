@@ -2,6 +2,7 @@ import { Client } from 'pg';
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { applyGrants } from './db-grants.mjs';
+import webpush from 'web-push';
 
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL required');
 const database = `saleshub_test_${randomBytes(8).toString('hex')}`;
@@ -26,12 +27,14 @@ try {
   Object.assign(env, { DATABASE_URL: appUrl.toString(), TEST_DATABASE_URL: appUrl.toString(), MIGRATION_DATABASE_URL: ownerUrl });
   const browser = process.argv.includes('--browser');
   if (browser) {
+    // Phone notifications are on in browser tests; throwaway keys unless the caller supplies its own.
+    if (!env.WEB_PUSH_PUBLIC_KEY) { const keys = webpush.generateVAPIDKeys(); Object.assign(env, { WEB_PUSH_PUBLIC_KEY: keys.publicKey, WEB_PUSH_PRIVATE_KEY: keys.privateKey, WEB_PUSH_SUBJECT: 'mailto:e2e@example.invalid' }); }
     env.APP_ORIGIN = 'http://localhost:3100'; env.PORT = '3101'; env.API_INTERNAL_URL = 'http://127.0.0.1:3101'; env.NEXT_DIST_DIR = '.next-e2e';
     env.ADMIN_EMAIL = 'e2e-admin@example.invalid'; env.ADMIN_PASSWORD = 'E2E-only-password!42'; env.ADMIN_NAME = 'DEMO E2E Admin';
     const seed = spawnSync(process.execPath, ['apps/api/dist/src/bootstrap-admin.js'], { env, stdio: 'inherit' });
     if (seed.status !== 0) throw new Error('Test bootstrap failed');
   }
-  const result = spawnSync(process.execPath, browser ? ['node_modules/@playwright/test/cli.js', 'test'] : ['--test', '--test-concurrency=1', 'apps/api/dist/test/integration.spec.js', 'apps/api/dist/test/sales.spec.js', 'apps/api/dist/test/phase6.spec.js', 'apps/api/dist/test/messaging.spec.js', 'apps/api/dist/test/attachments.spec.js', 'apps/api/dist/test/messaging-live.spec.js', 'apps/api/dist/test/messaging-lifecycle.spec.js', 'apps/api/dist/test/mail.spec.js', 'apps/api/dist/test/db-roles.spec.js'], { env, stdio: 'inherit' });
+  const result = spawnSync(process.execPath, browser ? ['node_modules/@playwright/test/cli.js', 'test'] : ['--test', '--test-concurrency=1', 'apps/api/dist/test/integration.spec.js', 'apps/api/dist/test/sales.spec.js', 'apps/api/dist/test/phase6.spec.js', 'apps/api/dist/test/messaging.spec.js', 'apps/api/dist/test/attachments.spec.js', 'apps/api/dist/test/messaging-live.spec.js', 'apps/api/dist/test/messaging-lifecycle.spec.js', 'apps/api/dist/test/push.spec.js', 'apps/api/dist/test/mail.spec.js', 'apps/api/dist/test/db-roles.spec.js'], { env, stdio: 'inherit' });
   process.exitCode = result.status ?? 1;
   if (!browser && result.status === 0 && process.argv.includes('--backup-drill')) {
     const drill = spawnSync(process.execPath, ['scripts/backup-drill.mjs'], { env: { ...env, DATABASE_URL: env.MIGRATION_DATABASE_URL }, stdio: 'inherit' });

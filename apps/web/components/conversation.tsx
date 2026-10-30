@@ -3,7 +3,7 @@ import { Fragment, useEffect, useRef, useState, type ClipboardEvent, type DragEv
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, formatDate, upload } from '../lib/api';
 import { fileSize } from '../lib/delivery';
-import { attachmentScanLabels, attachmentUrl, conversationsKey, downloadable, filesKey, messageAttachmentAccept, messageAttachmentMaxBytes, messageAttachmentsPerMessage, messageEditWindowMs, messageMaxLength, messageStateLabels, newNonce, pinsKey, roleLabels, type Attachment, type Colleague, type Mention, type Message, type MessagePage, type SharedFile } from '../lib/messaging';
+import { attachmentScanLabels, attachmentUrl, conversationsKey, downloadable, filesKey, messageAttachmentAccept, messageAttachmentMaxBytes, messageAttachmentsPerMessage, messageEditWindowMs, messageMaxLength, messageReactions, messageStateLabels, newNonce, pinsKey, roleLabels, type Attachment, type Colleague, type Mention, type Message, type MessagePage, type SharedFile } from '../lib/messaging';
 import { Notice } from './ui';
 import { useLiveIntervals } from './live';
 
@@ -150,6 +150,25 @@ function MessageActions({ message, meId, canPost, abilities, onChange }: { messa
   </div>;
 }
 
+const reactionLabel = Object.fromEntries(messageReactions.map(([emoji, label]) => [emoji, label]));
+/** Reaction chips (tap to toggle yours) and a small palette. Reactions never notify anyone. */
+function Reactions({ message, canPost, onChange }: { message: Message; canPost: boolean; onChange: (m: Message) => void }) {
+  const [error, setError] = useState<unknown>(); const [busy, setBusy] = useState(false);
+  if (!message.reactions.length && !canPost) return null;
+  const toggle = async (emoji: string, palette?: HTMLDetailsElement | null) => {
+    if (palette) palette.open = false;
+    setBusy(true); setError(undefined);
+    try { onChange(await api<Message>(`/messaging/messages/${message.id}/reactions`, 'POST', { emoji })); } catch (e) { setError(e); } finally { setBusy(false); }
+  };
+  return <div className="reactions">
+    {message.reactions.map(r => <button key={r.emoji} type="button" className={`reaction${r.mine ? ' mine' : ''}`} aria-pressed={r.mine} disabled={!canPost || busy} title={r.names.join(', ') + (r.count > r.names.length ? ` ve ${r.count - r.names.length} kişi` : '')}
+      aria-label={`${reactionLabel[r.emoji] ?? r.emoji}: ${r.count} kişi (${r.names.join(', ')})${r.mine ? ', sizinki' : ''}`} onClick={() => void toggle(r.emoji)}><span aria-hidden="true">{r.emoji}</span> {r.count}</button>)}
+    {canPost && <details className="reaction-picker"><summary aria-label="Tepki ekle"><span aria-hidden="true">☺+</span></summary>
+      <div role="group" aria-label="Tepki seç">{messageReactions.map(([emoji, label]) => <button key={emoji} type="button" className="reaction-option" aria-label={label} title={label} disabled={busy} onClick={e => void toggle(emoji, e.currentTarget.closest('details'))}>{emoji}</button>)}</div></details>}
+    <Notice error={error} />
+  </div>;
+}
+
 function History({ id }: { id: string }) {
   const history = useQuery({ queryKey: ['messaging-revisions', id], queryFn: () => api<Revision[]>(`/messaging/messages/${id}/revisions`) });
   if (history.error) return <Notice error={history.error} />;
@@ -166,6 +185,7 @@ function MessageItem({ message, meId, conversationId, canPost, threaded, abiliti
     {removed ? <p className="message-body muted"><em>{messageStateLabels[message.state]}</em>{message.hiddenReason && <> Gerekçe: {message.hiddenReason}</>}</p>
       : <>{message.body && <MessageText body={message.body} mentions={message.mentions} meId={meId} />}
         {message.attachments.length > 0 && <div className="message-files">{message.attachments.map(f => <AttachmentView key={f.id} file={f} />)}</div>}</>}
+    {!removed && <Reactions message={message} canPost={canPost} onChange={onChange} />}
     {history && !removed && <History id={message.id} />}
     <MessageActions message={message} meId={meId} canPost={canPost} abilities={abilities} onChange={onChange} />
     {threaded && (message.replyCount > 0 || (canPost && !removed)) && <button type="button" className="link-button" aria-expanded={open} onClick={() => setOpen(!open)}>{message.replyCount ? `${message.replyCount} yanıt` : 'Yanıtla'}{open ? ' · kapat' : ''}</button>}

@@ -66,3 +66,16 @@ Ayrıntı: `docs/phase-8-team-messaging.md`. F8-02'de ilk iki madde ve tekrarlan
 - Özel grup ve birebir konuşmalar üye olmayana, ADMIN dahil, görünmez.
 - Tekrarlanan gönderim tek mesaj ve tek bildirim üretir.
 - Dosya türü içerikten doğrulanır, makrolu Office dosyası reddedilir, taranmamış dosya indirilemez.
+
+## Faz 9
+
+Ayrıntı: `docs/phase-9-mobile.md`. Otomatik testlerle doğrulananlar:
+
+- Sunucu yalnız izin listesindeki bildirim servislerine istek atar; keyfi adres reddedilir.
+- Önizleme kapalı cihaza giden şifreli içerikte mesaj metni yoktur; bildirim okuma anındaki erişimle hesaplanır, erişimi kalkmış içerik gönderilmez.
+- Her bildirim tam bir kez gönderilir; çıkış, parola sıfırlama ve pasifleştirme cihaz aboneliklerini siler; 404/410 yanıtı cihazı kaldırır.
+- Tepkiler sabit kümeyle sınırlıdır, yalnız yazabilenlerce verilir, bildirim üretmez, kaldırılmış mesajda görünmez.
+- Uygulama Chrome kurulabilirlik denetiminden hatasız geçer; service worker hiçbir yanıtı önbelleğe almaz ve bildirim bağlantısını site içinde tutar.
+
+Gerçek cihazda doğrulanacaklar `docs/go-live-checklist.md` bölüm 2'dedir.
+

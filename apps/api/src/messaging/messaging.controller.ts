@@ -2,7 +2,7 @@ import { Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res } f
 import { ApiBody, ApiConsumes, ApiProduces, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { conversationMuteSchema, messageEditSchema, messageHideSchema, messageKnowledgeSchema, messageSearchSchema, conversationCreateSchema, conversationListSchema, conversationMembersSchema, conversationPatchSchema, conversationReadSchema, directConversationSchema, messageCreateSchema, messageListSchema, recordConversationSchema } from '@saleshub/shared';
+import { conversationMuteSchema, messageReactionSchema, messageEditSchema, messageHideSchema, messageKnowledgeSchema, messageSearchSchema, conversationCreateSchema, conversationListSchema, conversationMembersSchema, conversationPatchSchema, conversationReadSchema, directConversationSchema, messageCreateSchema, messageListSchema, recordConversationSchema } from '@saleshub/shared';
 import { Access, type AuthRequest } from '../security/access';
 import { ValidatedBody as Input, ZodValidationPipe as V } from '../validation.pipe';
 import { MessagingService } from './messaging.service';
@@ -60,6 +60,8 @@ export class MessagingController {
   @Post('messages/:id/delete') deleteMessage(@Req() r: AuthRequest, @Param('id', UUID) id: string) { return this.lifecycle.remove(r.actor, id); }
   @Post('messages/:id/hide') hide(@Req() r: AuthRequest, @Param('id', UUID) id: string, @Input(messageHideSchema) b: z.infer<typeof messageHideSchema>) { return this.lifecycle.hide(r.actor, id, b.reason); }
   @Post('messages/:id/unhide') unhide(@Req() r: AuthRequest, @Param('id', UUID) id: string) { return this.lifecycle.hide(r.actor, id, null); }
+  /** Adds the reaction if absent, removes it if present (toggle). */
+  @Post('messages/:id/reactions') react(@Req() r: AuthRequest, @Param('id', UUID) id: string, @Input(messageReactionSchema) b: z.infer<typeof messageReactionSchema>) { return this.lifecycle.react(r.actor, id, b.emoji); }
   @Post('messages/:id/pin') pin(@Req() r: AuthRequest, @Param('id', UUID) id: string) { return this.lifecycle.pin(r.actor, id, true); }
   @Post('messages/:id/unpin') unpin(@Req() r: AuthRequest, @Param('id', UUID) id: string) { return this.lifecycle.pin(r.actor, id, false); }
   /** Draft knowledge card from a message (requires knowledge.write); goes through the normal review and publish flow. */

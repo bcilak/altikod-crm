@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { z } from 'zod';
-import { conversationCreateSchema, conversationListSchema, conversationPatchSchema, conversationRecordTypes, groupMaxMembers, messageCreateSchema, messageListSchema } from '@saleshub/shared';
+import { messageReactions, conversationCreateSchema, conversationListSchema, conversationPatchSchema, conversationRecordTypes, groupMaxMembers, messageCreateSchema, messageListSchema } from '@saleshub/shared';
 import { PrismaService } from '../prisma.service';
 import { ConversationKind, Prisma } from '../generated/prisma/client';
 import { Actor, isManager } from '../security/access';
@@ -10,16 +10,21 @@ import { projectScope } from '../delivery/projects.service';
 type RecordType = typeof conversationRecordTypes[number];
 const userCard = { select: { id: true, name: true, isActive: true } } as const;
 export const attachmentSelect = { id: true, name: true, mimeType: true, size: true, scanStatus: true } as const;
-export const messageSelect = { id: true, seq: true, conversationId: true, parentId: true, body: true, createdAt: true, editedAt: true, deletedAt: true, hiddenAt: true, hiddenReason: true, pinnedAt: true, expiredAt: true, author: userCard, attachments: { where: { removedAt: null }, select: attachmentSelect, orderBy: { createdAt: 'asc' } }, mentions: { select: { user: { select: { id: true, name: true } } } } } as const satisfies Prisma.MessageSelect;
+export const messageSelect = { id: true, seq: true, conversationId: true, parentId: true, body: true, createdAt: true, editedAt: true, deletedAt: true, hiddenAt: true, hiddenReason: true, pinnedAt: true, expiredAt: true, author: userCard, attachments: { where: { removedAt: null }, select: attachmentSelect, orderBy: { createdAt: 'asc' } }, mentions: { select: { user: { select: { id: true, name: true } } } }, reactions: { select: { emoji: true, userId: true, user: { select: { name: true } } }, orderBy: { createdAt: 'asc' } } } as const satisfies Prisma.MessageSelect;
 type MessageRow = Prisma.MessageGetPayload<{ select: typeof messageSelect }>;
 export type MessageState = 'ACTIVE' | 'DELETED' | 'HIDDEN' | 'EXPIRED';
 export const messageState = (m: { deletedAt: Date | null; hiddenAt: Date | null; expiredAt: Date | null }): MessageState => m.expiredAt ? 'EXPIRED' : m.deletedAt ? 'DELETED' : m.hiddenAt ? 'HIDDEN' : 'ACTIVE';
 /** Deleted, hidden and expired messages keep their place in the conversation but never expose text, files or mentions. */
-export const shape = <T extends MessageRow>({ mentions, deletedAt, hiddenAt, hiddenReason, expiredAt, ...m }: T) => {
+export const shape = <T extends MessageRow>({ mentions, reactions, deletedAt, hiddenAt, hiddenReason, expiredAt, ...m }: T, viewerId: string) => {
   const state = messageState({ deletedAt, hiddenAt, expiredAt });
-  return state === 'ACTIVE' ? { ...m, state, hiddenReason: null, mentions: mentions.map(x => x.user) }
-    : { ...m, state, body: '', attachments: [], mentions: [], pinnedAt: null, hiddenReason: state === 'HIDDEN' ? hiddenReason : null };
+  return state === 'ACTIVE' ? { ...m, state, hiddenReason: null, mentions: mentions.map(x => x.user), reactions: groupReactions(reactions, viewerId) }
+    : { ...m, state, body: '', attachments: [], mentions: [], reactions: [], pinnedAt: null, hiddenReason: state === 'HIDDEN' ? hiddenReason : null };
 };
+/** One entry per emoji in the fixed order: count, whether the viewer reacted, and up to 10 names for the tooltip. */
+function groupReactions(rows: { emoji: string; userId: string; user: { name: string } }[], viewerId: string) {
+  return messageReactions.map(([emoji]) => rows.filter(r => r.emoji === emoji)).filter(group => group.length)
+    .map(group => ({ emoji: group[0]!.emoji, count: group.length, mine: group.some(r => r.userId === viewerId), names: group.slice(0, 10).map(r => r.user.name) }));
+}
 /** Rows that still carry content (search, notifications, pins). */
 export const activeMessage = { deletedAt: null, hiddenAt: null, expiredAt: null } as const;
 export type MessageNotificationType = 'MESSAGE_MENTION' | 'MESSAGE_DIRECT' | 'MESSAGE_REPLY';
@@ -251,7 +256,7 @@ export class MessagingService {
     });
     const hasMore = rows.length > q.limit; const page = rows.slice(0, q.limit);
     if (!ascending) page.reverse();
-    return { items: page.map(({ _count, ...m }) => ({ ...shape(m), replyCount: _count.replies })), hasMore, lastSeq: row.lastSeq, readSeq: row.reads[0]?.lastReadSeq ?? 0 };
+    return { items: page.map(({ _count, ...m }) => ({ ...shape(m, actor.id), replyCount: _count.replies })), hasMore, lastSeq: row.lastSeq, readSeq: row.reads[0]?.lastReadSeq ?? 0 };
   }
   /** Idempotent per (author, clientNonce): a retried request returns the original message instead of posting twice. Attached drafts are linked exactly once. */
   async send(actor: Actor, id: string, input: z.infer<typeof messageCreateSchema>) {
@@ -261,7 +266,7 @@ export class MessagingService {
       await this.visible(this.prisma, actor, id);
       if (prior.conversationId !== id || prior.body !== input.body || prior.parentId !== (input.parentId ?? null) || prior.attachments.map(a => a.id).sort().join() !== [...input.attachmentIds].sort().join()
         || prior.mentions.map(m => m.user.id).sort().join() !== input.mentionIds.filter(m => m !== actor.id).sort().join()) throw new ConflictException('Bu istek anahtarı başka bir mesaj için kullanıldı');
-      return { ...shape(prior), replyCount: 0 };
+      return { ...shape(prior, actor.id), replyCount: 0 };
     };
     const prior = await replay();
     if (prior) return prior;
@@ -283,7 +288,7 @@ export class MessagingService {
         await this.notify(db, actor, row, created.id, input.parentId, mentioned.map(u => u.id));
         const message = await db.message.findUniqueOrThrow({ where: { id: created.id }, select: messageSelect });
         await this.markRead(db, id, actor.id, seq);
-        return { ...shape(message), replyCount: 0 };
+        return { ...shape(message, actor.id), replyCount: 0 };
       });
     } catch (error) {
       const raced = isUniqueViolation(error) ? await replay() : undefined;
@@ -324,7 +329,8 @@ export class MessagingService {
   async notificationTargets(actor: Actor, messageIds: string[]) {
     if (!messageIds.length) return new Map<string, { conversationId: string; conversation: string | null; author: string; parentId: string | null }>();
     const rows = await this.prisma.message.findMany({ where: { id: { in: messageIds }, ...activeMessage, conversation: conversationScope(actor) }, select: { id: true, parentId: true, author: { select: { name: true } }, conversation: { include: listInclude(actor.id) } } });
-    return new Map(rows.map(r => { const c = this.dto(actor, r.conversation); return [r.id, { conversationId: c.id, conversation: c.kind === 'CHANNEL' ? `#${c.name}` : c.name, author: r.author.name, parentId: r.parentId }]; }));
+    return new Map(rows.map(r => { const c = this.dto(actor, r.conversation); // A direct conversation is named after the other person, i.e. the author: no need to repeat it.
+      return [r.id, { conversationId: c.id, conversation: c.kind === 'DIRECT' ? null : c.kind === 'CHANNEL' ? `#${c.name}` : c.name, author: r.author.name, parentId: r.parentId }]; }));
   }
   /** Display names of conversations the actor can see (search results). */
   async describe(actor: Actor, ids: string[]) {

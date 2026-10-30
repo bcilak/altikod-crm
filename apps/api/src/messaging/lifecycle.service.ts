@@ -21,7 +21,7 @@ export class MessageLifecycleService {
     await db.$queryRaw`SELECT id FROM "Message" WHERE id = ${id}::uuid FOR UPDATE`;
     return { ...row, state: messageState(row) };
   }
-  private result(db: Db, id: string) { return db.message.findUniqueOrThrow({ where: { id }, select: { ...messageSelect, _count: { select: { replies: true } } } }).then(({ _count, ...m }) => ({ ...shape(m), replyCount: _count.replies })); }
+  private result(db: Db, id: string, viewerId: string) { return db.message.findUniqueOrThrow({ where: { id }, select: { ...messageSelect, _count: { select: { replies: true } } } }).then(({ _count, ...m }) => ({ ...shape(m, viewerId), replyCount: _count.replies })); }
 
   /** Authors may correct their own message for 15 minutes; the database archives the previous text and enforces the window too. */
   async edit(actor: Actor, id: string, body: string) {
@@ -37,7 +37,7 @@ export class MessageLifecycleService {
         await db.message.update({ where: { id }, data: { body, editedAt: new Date() } });
         await audit(db, actor.id, 'MESSAGE_EDIT', 'message', id, { conversationId: m.conversationId });
       }
-      return this.result(db, id);
+      return this.result(db, id, actor.id);
     });
   }
   /** Soft deletion by the author: the place stays (“Bu mesaj silindi”), the content is kept for audit/retention but never served again. */
@@ -48,7 +48,7 @@ export class MessageLifecycleService {
       if (m.state === 'DELETED' || m.state === 'EXPIRED') throw new ConflictException('Bu mesaj zaten kaldırıldı');
       await db.message.update({ where: { id }, data: { deletedAt: new Date(), deletedById: actor.id, pinnedAt: null, pinnedById: null } });
       await audit(db, actor.id, 'MESSAGE_DELETE', 'message', id, { conversationId: m.conversationId });
-      return this.result(db, id);
+      return this.result(db, id, actor.id);
     });
   }
   async hide(actor: Actor, id: string, reason: string | null) {
@@ -59,7 +59,7 @@ export class MessageLifecycleService {
       if (reason === null && m.state !== 'HIDDEN') throw new ConflictException('Mesaj gizli değil');
       await db.message.update({ where: { id }, data: reason === null ? { hiddenAt: null, hiddenById: null, hiddenReason: null } : { hiddenAt: new Date(), hiddenById: actor.id, hiddenReason: reason, pinnedAt: null, pinnedById: null } });
       await audit(db, actor.id, reason === null ? 'MESSAGE_UNHIDE' : 'MESSAGE_HIDE', 'message', id, { conversationId: m.conversationId, ...(reason ? { reason } : {}) });
-      return this.result(db, id);
+      return this.result(db, id, actor.id);
     });
   }
   async pin(actor: Actor, id: string, pinned: boolean) {
@@ -75,13 +75,25 @@ export class MessageLifecycleService {
         await db.message.update({ where: { id }, data: pinned ? { pinnedAt: new Date(), pinnedById: actor.id } : { pinnedAt: null, pinnedById: null } });
         await audit(db, actor.id, pinned ? 'MESSAGE_PIN' : 'MESSAGE_UNPIN', 'message', id, { conversationId: m.conversationId });
       }
-      return this.result(db, id);
+      return this.result(db, id, actor.id);
+    });
+  }
+  /** Toggles one reaction of the actor. Same rule as pinning: anyone who can write to the conversation; visible messages only. */
+  async react(actor: Actor, id: string, emoji: string) {
+    return this.prisma.$transaction(async db => {
+      const m = await this.locked(db, actor, id);
+      if (m.state !== 'ACTIVE') throw new ConflictException('Bu mesaja tepki verilemez');
+      if (!await canPost(db, actor, m.conversation)) throw new ForbiddenException('Bu konuşmaya yazma yetkiniz yok');
+      const key = { messageId_userId_emoji: { messageId: id, userId: actor.id, emoji } };
+      if (await db.messageReaction.findUnique({ where: key })) await db.messageReaction.delete({ where: key });
+      else await db.messageReaction.create({ data: { messageId: id, userId: actor.id, emoji } });
+      return this.result(db, id, actor.id);
     });
   }
   async pins(actor: Actor, conversationId: string) {
     if (!await this.prisma.conversation.findFirst({ where: { AND: [{ id: conversationId }, conversationScope(actor)] }, select: { id: true } })) throw new NotFoundException('Konuşma bulunamadı');
     const rows = await this.prisma.message.findMany({ where: { conversationId, pinnedAt: { not: null }, ...activeMessage }, orderBy: { pinnedAt: 'desc' }, select: messageSelect });
-    return rows.map(m => ({ ...shape(m), replyCount: 0 }));
+    return rows.map(m => ({ ...shape(m, actor.id), replyCount: 0 }));
   }
   /** Earlier texts of an edited message, oldest first, followed by the current one. Not available once removed or hidden. */
   async revisions(actor: Actor, id: string) {
@@ -117,7 +129,7 @@ export class MessageLifecycleService {
     const rows = await this.prisma.message.findMany({ where: { id: { in: hits.map(h => h.id) } }, select: messageSelect });
     const names = await this.messaging.describe(actor, [...new Set(rows.map(r => r.conversationId))]);
     const order = new Map(hits.map((h, i) => [h.id, i]));
-    return { items: rows.sort((a, b) => order.get(a.id)! - order.get(b.id)!).map(m => ({ message: { ...shape(m), replyCount: 0 }, conversation: names.get(m.conversationId)! })) };
+    return { items: rows.sort((a, b) => order.get(a.id)! - order.get(b.id)!).map(m => ({ message: { ...shape(m, actor.id), replyCount: 0 }, conversation: names.get(m.conversationId)! })) };
   }
   /**
    * Turns a message into a draft knowledge card for review (Faz 6 workflow). Clean PDF/PNG/JPEG files up to 5 MB are attached

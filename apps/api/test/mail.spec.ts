@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import webpush from 'web-push';
 import type { AddressInfo } from 'node:net';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -12,7 +13,8 @@ import { authMail } from '../src/auth/mailer';
 import { parseEnv } from '../src/env';
 import { configureApp } from '../src/http';
 
-const base = { NODE_ENV: 'production', APP_ORIGIN: 'https://crm.example.invalid', DATABASE_URL: 'postgresql://u:p@localhost:5432/db', MALWARE_SCANNER: 'clamd', CLAMD_HOST: 'clamav' };
+const vapid = webpush.generateVAPIDKeys();
+const base = { NODE_ENV: 'production', APP_ORIGIN: 'https://crm.example.invalid', DATABASE_URL: 'postgresql://u:p@localhost:5432/db', MALWARE_SCANNER: 'clamd', CLAMD_HOST: 'clamav', WEB_PUSH_PUBLIC_KEY: vapid.publicKey, WEB_PUSH_PRIVATE_KEY: vapid.privateKey, WEB_PUSH_SUBJECT: 'mailto:crm@example.invalid' };
 const smtp = { MAIL_TRANSPORT: 'smtp', SMTP_HOST: 'smtp.example.invalid', MAIL_FROM: 'Altıkod CRM <crm@example.invalid>', SMTP_USER: 'crm', SMTP_PASSWORD: 'Secret-smtp-value-1' };
 const rejects = (env: NodeJS.ProcessEnv, field: string) => assert.throws(() => parseEnv(env), (error: Error) => error.message.includes(field) && !error.message.includes('Secret-smtp-value-1'));
 

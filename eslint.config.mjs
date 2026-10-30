@@ -5,4 +5,5 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   { files: ['**/*.mjs'], languageOptions: { globals: { process: 'readonly', console: 'readonly', URL: 'readonly' } } },
+  { files: ['apps/web/public/sw.js'], languageOptions: { sourceType: 'script', globals: { self: 'readonly', URL: 'readonly' } } },
 );

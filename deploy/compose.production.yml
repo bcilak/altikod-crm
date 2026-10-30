@@ -50,6 +50,11 @@ services:
       MALWARE_SCANNER: clamd
       CLAMD_HOST: clamav
       CLAMD_PORT: "3310"
+      # Phone notifications (Faz 9): generate once with `npm run push:keys` and keep in the secret store.
+      # The API must reach the push services over HTTPS (web.push.apple.com, *.push.apple.com, fcm.googleapis.com, updates.push.services.mozilla.com, *.notify.windows.com).
+      WEB_PUSH_PUBLIC_KEY: ${WEB_PUSH_PUBLIC_KEY:?Set Web Push public key (npm run push:keys)}
+      WEB_PUSH_PRIVATE_KEY: ${WEB_PUSH_PRIVATE_KEY:?Set Web Push private key}
+      WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:?Set contact, e.g. mailto:it@altikod.com}
       HOST: 0.0.0.0
       PRIVATE_FILES_DIR: /app/.private-files
     volumes: ["private-files:/app/.private-files"]

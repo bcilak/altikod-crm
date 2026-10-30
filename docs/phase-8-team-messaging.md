@@ -1,6 +1,6 @@
 # Faz 8 — ekip içi mesajlaşma ve belge paylaşımı
 
-30 Ekim 2026. **Durum:** F8-01 kararları önerilen varsayılanlarla kabul edildi. **F8-02 (API çekirdeği), F8-03 (ekranlar), F8-04 (dosya ekleri ve virüs taraması) ve F8-05 (canlı akış, bahsetme ve bildirimler) uygulandı ve test edildi.** Arama/düzenleme/silme/saklama (F8-06) ve gerçek kullanıcılarla pilot (F8-07) henüz yok. Teslim kayıtları aşağıda “F8-02…05 teslimatı” bölümlerindedir. Faz 7 (entegrasyonlar ve AI) kapsam dışı kaldığı için bu iş Faz 8 olarak numaralandı; dış sisteme bağlanmadığı için Faz 7 kararıyla çelişmez.
+30 Ekim 2026. **Durum:** F8-01 kararları önerilen varsayılanlarla kabul edildi. **Yazılım tamamlandı: F8-02…F8-06 uygulandı ve test edildi; F8-07'nin otomatik test ve mobil kontrol kısmı yapıldı.** Gerçek kullanıcılarla pilot yapılmadı; planı ve kayıt şablonu `docs/pilot-messaging.md`. Pilot ve oradaki ön koşullar (staging, yedek tatbikatı, hukuk incelemesi) tamamlanmadan Faz 8 canlıya hazır sayılmaz. Teslim kayıtları aşağıda “F8-02…07” bölümlerindedir. Faz 7 (entegrasyonlar ve AI) kapsam dışı kaldığı için bu iş Faz 8 olarak numaralandı; dış sisteme bağlanmadığı için Faz 7 kararıyla çelişmez.
 
 ## Sorun
 
@@ -245,6 +245,37 @@ F8-03 sonunda polling ile kullanılabilir bir sürüm olur; canlılık (F8-05) a
 - Bulunan ve düzeltilen sorun: Next.js geliştirme sunucusu SSE yanıtını gzip ile sıkıştırıp tamponluyordu (tarayıcıda `ready` olayı 6 sn içinde gelmedi); `no-transform` ile `ready` 12 ms'de geldi.
 - Caddy: üretim Caddyfile'ı (`encode zstd gzip` + `/api/*` → API) bu konteynerde Caddy 2.6.2 ile denendi; `text/event-stream` sıkıştırılmadan anında iletildi, Caddyfile değiştirilmedi. Üretimdeki `caddy:2-alpine` sürümüyle staging'de yeniden doğrulanmalıdır.
 - Sınır: tek API sürecinde ve yerelde doğrulandı; birden çok API kopyası için her kopya kendi `LISTEN` bağlantısını açar (tasarım gereği çalışır, burada denenmedi).
+
+## F8-06 teslimatı
+
+### Kullanım
+
+- Her mesajın **İşlemler** menüsü yalnız yapılabilecek işlemleri gösterir: **Düzenle** (yazar, ilk 15 dakika), **Sil** (yazar), **Sabitle/Sabitlemeyi kaldır** (konuşmaya yazabilen herkes), **Gizle/Gizlemeyi kaldır** (moderatör), **Bilgi bankasına öner** (bilgi bankasına yazabilenler: ADMIN, MANAGER, TECHNICAL).
+- Düzenlenen mesajda “(düzenlendi)” bağlantısı önceki metinleri tarihleriyle gösterir. Silinen mesajın yerinde “Bu mesaj silindi.”, gizlenende “Bu mesaj bir yönetici tarafından gizlendi. Gerekçe: …”, saklama süresi dolanda “Saklama süresi dolduğu için kaldırıldı.” yazar; yanıt dizileri yerinde kalır.
+- **Sabitlenenler** bölümü (Mesajlar'da ve kayıt sayfasındaki Konuşma'da) konuşma başına en fazla 20 mesajı listeler.
+- **Sessize al** (Konuşma bilgisi): 1 saat, 8 saat, 1 hafta veya açana kadar. Sessizdeki konuşma listede “sessiz” görünür, kendi okunmamış sayısını gösterir ama menü toplamına katılmaz; bildirim yalnız sizden bahsedilirse gelir.
+- **Mesajlarda ara** (konuşma listesinin üstü): Türkçe kök ve önek eşleşmesiyle (ör. “teklif” → “teklifleri”, “gönder” → “gönderiliyor”) ve dosya adıyla arar; en çok 50 sonuç, aranan kelimeler vurgulanır, sonuç konuşmayı açar.
+- **Bilgi bankasına öner**: başlık ve kategoriyle taslak bilgi kartı açar; özet mesaj metnidir, taranmış PDF/PNG/JPEG (≤5 MB) dosyalar karta eklenir, diğerleri “eklenemeyen” olarak bildirilir. Kart Faz 6 inceleme/yayın akışından geçer; yayınlanana kadar satış ekibi görmez.
+
+### Kurallar
+
+- Düzenleme: yazar, mesaj görünürken, konuşmaya hâlâ yazabiliyorken, gönderimden sonraki 15 dakika içinde. PostgreSQL tetikleyicisi metin değişikliğini yalnız `editedAt` ile birlikte ve 15 dakika içinde kabul eder, önceki metni `MessageRevision` tablosuna kendisi yazar; geçmiş atlanamaz, değiştirilemez, saklama silmesi dışında silinemez. Bahsetmeler düzenlemeyle değişmez.
+- Silme yumuşaktır ve geri alınamaz (tetikleyici). Silinen/gizlenen/süresi dolan mesajın metni, dosyaları ve bahsetmeleri hiçbir uçtan (liste, arama, sabitlenenler, bildirim, dosya indirme) dönmez; bu mesajlara yanıt yazılamaz; ilgili bildirimler listeden düşer. İçerik denetim/saklama için veritabanında kalır (F8-01 kararı); uygulamada yönetici dahil kimse okuyamaz. Hukuki talep için dışa aktarım (F8-01) **uygulanmadı**; hukuki görüş bekleniyor.
+- Moderasyon: kanallarda `messaging.channels.manage` sahipleri (ADMIN, MANAGER), kayıt konuşmalarında ADMIN/MANAGER; gerekçe zorunlu (3–500 karakter), herkese gösterilir ve denetim kaydına yazılır. Özel grup ve birebirde moderatör yoktur.
+- Arama, önce kullanıcının okuyabildiği konuşmaları belirler, sonra yalnız bunlarda arar (`to_tsvector('turkish', body)` GIN dizini + dosya adı `ILIKE`); sıralama ve 50 sonuç sınırı erişim dışındaki içerikten etkilenmez.
+- Saklama işi (`MESSAGE_RETENTION_DAYS`, varsayılan 730 gün, 6 saatte bir): kanal/grup/birebir mesajlarda metni boşaltır, düzenleme geçmişini siler, dosyaları `removedAt` ile işaretleyip başka kayıt kullanmıyorsa diskten siler ve `MESSAGE_RETENTION` denetim kaydı yazar (yalnız sayılar). Kayıt konuşmaları kayıtla birlikte saklanır. Yedekleme betiği kaldırılmış dosyaları atlar. Süre dolumu geri alınamaz (tetikleyici).
+- Düzenleme, silme, gizleme ve sabitleme canlı akışta `update` olayı üretir; açık konuşmalar yenilenir. Saklama silmeleri sinyal üretmez (toplu ve eski içerik).
+
+### Doğrulama (30 Ekim 2026)
+
+- 77 PostgreSQL entegrasyon kontrolü geçti (gerçek ClamAV ile; 8'i F8-06): düzenleme ve geçmiş (DB düzeyinde geçmişsiz değişiklik, 15 dk sonrası ve kimlik alanı değişikliği reddi), silme (yer tutucu, dosya/bildirim/yanıt kapanması, geri alınamazlık), moderasyon (kanal/kayıt yetkisi, özel konuşmada ret, gerekçe kaydı, aramadan düşme), sabitleme (20 sınırı, görüntüleyici reddi, silinenin düşmesi), sessize alma (bildirim ve toplam), arama (Türkçe kök/önek, dosya adı, erişim dışı kaydın bulunmaması, konuşma süzgeci, silinenin düşmesi), bilgi bankası önerisi (yetki, dosya seçimi, taslak görünürlüğü), saklama (eski kanal/birebir mesajı, geçmiş ve dosya silme, kayıt konuşmasının korunması, ikinci çalıştırmada 0); canlı akış testine `update` olayı eklendi.
+- Playwright mesajlaşma senaryosu tarayıcıda düzenleme + geçmiş, sabitleme + Sabitlenenler, arama vurgusu, bilgi bankasına öneri ve silmeyi kapsar; 4 senaryo geçti.
+
+## F8-07 durumu
+
+- Otomatik testler: yukarıdaki entegrasyon ve Playwright kapsamı tamamlandı.
+- Mobil kontrol (390 px, Playwright): konuşma listesi, açık konuşma, işlem menüsü, arama sonuçları ve firma sayfası yatay taşmasız; ekran görüntüleri `test-results/mobile-*.png` (test çıktısı, repoya girmez). Gerçek telefon cihazlarında kontrol pilotun parçasıdır.
+- Pilot: **yapılmadı.** Plan, ölçümler, kayıt şablonu, çıkış kararı ve KVKK aydınlatma metni taslağı `docs/pilot-messaging.md`.
 
 ## Kabul kriterleri
 

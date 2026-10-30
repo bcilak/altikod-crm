@@ -7,14 +7,14 @@ import { Actor } from '../security/access';
 import { conversationScope } from './messaging.service';
 
 type Subscriber = { actor: Actor; res: Response };
-type Signal = { type: 'message'; conversationId: string; seq: number } | { type: 'attachment'; conversationId: string } | { type: 'notification'; userId: string };
+type Signal = { type: 'message'; conversationId: string; seq: number } | { type: 'attachment' | 'update'; conversationId: string } | { type: 'notification'; userId: string };
 const channel = 'saleshub_messaging';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function parse(payload: string | undefined): Signal | undefined {
   try {
     const value = JSON.parse(payload ?? '') as Record<string, unknown>;
-    if ((value.type === 'message' || value.type === 'attachment') && typeof value.conversationId === 'string' && uuid.test(value.conversationId)) return value.type === 'message' ? { type: 'message', conversationId: value.conversationId, seq: Number(value.seq) } : { type: 'attachment', conversationId: value.conversationId };
+    if ((value.type === 'message' || value.type === 'attachment' || value.type === 'update') && typeof value.conversationId === 'string' && uuid.test(value.conversationId)) return value.type === 'message' ? { type: 'message', conversationId: value.conversationId, seq: Number(value.seq) } : { type: value.type, conversationId: value.conversationId };
     if (value.type === 'notification' && typeof value.userId === 'string' && uuid.test(value.userId)) return { type: 'notification', userId: value.userId };
   } catch { /* ignore malformed signals */ }
   return undefined;

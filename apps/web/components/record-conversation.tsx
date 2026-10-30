@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { conversationsKey, type ConversationDetail, type RecordType } from '../lib/messaging';
-import { ConversationFiles, MessageStream } from './conversation';
+import { ConversationFiles, MessageStream, PinnedMessages } from './conversation';
 import { Notice, useMe } from './ui';
 
 /**
@@ -22,7 +22,8 @@ export function RecordConversation({ recordType, recordId }: { recordType: Recor
       {c && me && <>
         <p className="muted record-conversation-note">Bu kayda erişimi olan herkes bu konuşmayı görür; erişimi kalkan kişi göremez. <Link className="text-link" href={`/messages?c=${c.id}`}>Mesajlar’da aç</Link></p>
         {!c.canPost && <p className="notice">{c.archivedAt ? 'Konuşma arşivlendi.' : 'Bu konuşmayı okuyabilirsiniz; yazma yetkiniz yok.'}</p>}
-        <MessageStream conversationId={c.id} meId={me.id} canPost={c.canPost} />
+        <MessageStream conversationId={c.id} meId={me.id} canPost={c.canPost} abilities={c} />
+        <details className="record-files"><summary>Sabitlenenler</summary><PinnedMessages conversationId={c.id} /></details>
         <details className="record-files"><summary>Paylaşılan dosyalar</summary><ConversationFiles conversationId={c.id} /></details>
       </>}
     </div>

@@ -1,7 +1,7 @@
 'use client';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { conversationsKey, filesKey, listInterval, threadInterval } from '../lib/messaging';
+import { conversationsKey, filesKey, listInterval, pinsKey, threadInterval } from '../lib/messaging';
 
 type LiveState = 'connecting' | 'live' | 'offline';
 const LiveContext = createContext<LiveState>('connecting');
@@ -26,6 +26,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       source.addEventListener('ready', () => { delay = 5_000; setState('live'); refresh([conversationsKey, ['messaging-messages'], ['/notifications']]); });
       source.addEventListener('message', e => { const { conversationId } = JSON.parse((e as MessageEvent).data); refresh([conversationsKey, ['messaging-messages', conversationId], filesKey(conversationId)]); });
       source.addEventListener('attachment', e => { const { conversationId } = JSON.parse((e as MessageEvent).data); refresh([['messaging-messages', conversationId], filesKey(conversationId)]); });
+      source.addEventListener('update', e => { const { conversationId } = JSON.parse((e as MessageEvent).data); refresh([['messaging-messages', conversationId], filesKey(conversationId), pinsKey(conversationId), ['messaging-revisions']]); });
       source.addEventListener('notification', () => refresh([['/notifications']]));
       source.onerror = () => {
         setState('offline');

@@ -18,6 +18,8 @@ const schema = z.object({
   MALWARE_SCANNER: z.enum(['none', 'clamd']).default('none'),
   CLAMD_HOST: optional(z.string().min(1)),
   CLAMD_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
+  // F8-01 default: channel, group and direct messages are kept two years; record conversations live as long as the record.
+  MESSAGE_RETENTION_DAYS: z.coerce.number().int().min(30).max(3650).default(730),
 }).superRefine((value, ctx) => {
   if (value.NODE_ENV === 'production' && !value.APP_ORIGIN.startsWith('https://')) ctx.addIssue({ code: 'custom', path: ['APP_ORIGIN'], message: 'Production requires HTTPS' });
   if (value.NODE_ENV === 'production' && value.MAIL_TRANSPORT !== 'smtp') ctx.addIssue({ code: 'custom', path: ['MAIL_TRANSPORT'], message: 'Production requires SMTP delivery' });

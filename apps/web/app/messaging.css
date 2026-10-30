@@ -70,3 +70,19 @@ a.file-chip:hover{background:var(--dp-color-selection)}
 .mention-options{list-style:none;margin:0;padding:6px;border:2px solid var(--dp-color-outline);border-radius:12px;background:var(--dp-color-panel);box-shadow:3px 3px 0 var(--dp-color-outline);display:grid;gap:2px;max-width:420px}
 .mention-options li{padding:8px 10px;border-radius:8px;cursor:pointer;min-height:40px}
 .mention-options li[aria-selected=true],.mention-options li:hover{background:var(--dp-color-selection)}
+/* F8-06: message actions, history, search, pins */
+.message.removed{background:transparent;border:1px dashed var(--dp-color-rule-muted)}
+.message-meta .badge{font-size:11px}
+.message-actions{margin-top:2px}
+.action-menu{display:inline-block}.action-menu summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--color-muted);list-style:none;min-height:32px;display:inline-flex;align-items:center}
+.action-menu summary::-webkit-details-marker{display:none}.action-menu summary::after{content:' ▾'}
+.action-menu[open]>div{display:flex;flex-wrap:wrap;gap:4px 14px;padding:6px 0}
+.inline-form{display:grid;gap:8px;margin:8px 0;padding:10px;border:2px solid var(--dp-color-outline);border-radius:12px;background:var(--dp-color-panel)}
+.revisions{list-style:none;margin:6px 0;padding:8px 10px;border-left:3px solid var(--dp-color-rule-muted);display:grid;gap:6px}
+.message-search form{display:grid}.message-search input{min-height:44px}
+.search-results{display:grid;gap:6px;border-bottom:2px solid var(--dp-color-rule-muted);padding-bottom:10px}
+.search-results ul{display:grid;gap:4px;list-style:none;padding:0;margin:0}
+.search-hit{align-items:flex-start;font-weight:500;font-size:14px}
+.search-hit mark{background:var(--dp-color-accent-warm);color:inherit;border-radius:3px;padding:0 2px}
+.mute-control{margin:8px 0 14px}
+.chat-back{white-space:nowrap;flex-shrink:0}

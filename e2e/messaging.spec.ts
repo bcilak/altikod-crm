@@ -48,6 +48,31 @@ test('team messaging: channel, direct message, thread, unread badge, record conv
   await composer.pressSequentially('kanal toplantısı 14:00'); await composer.press('Enter');
   await expect(page.getByRole('log', { name: 'Mesajlar' }).locator('.mention', { hasText: '@E2E Satış Uzmanı' })).toBeVisible();
 
+  // F8-06: edit with history, pin, search, knowledge suggestion and soft delete, all from the message actions menu.
+  const log = page.getByRole('log', { name: 'Mesajlar' });
+  const act = async (text: string, action: string) => { const item = log.locator('li.message').filter({ hasText: text }); await item.locator('summary', { hasText: 'İşlemler' }).click(); await item.getByRole('button', { name: action }).click(); return item; };
+  const meeting = await act('kanal toplantısı 14:00', 'Düzenle');
+  await meeting.getByLabel('Mesajı düzenle').fill('@E2E Satış Uzmanı kanal toplantısı 15:00'); await meeting.getByLabel('Mesajı düzenle').press('Enter');
+  await expect(log.getByText('kanal toplantısı 15:00')).toBeVisible();
+  const updated = log.locator('li.message').filter({ hasText: 'kanal toplantısı 15:00' });
+  await updated.getByRole('button', { name: '(düzenlendi)' }).click();
+  await expect(updated.getByRole('list', { name: 'Düzenleme geçmişi' }).getByText('kanal toplantısı 14:00')).toBeVisible();
+  await act('kanal toplantısı 15:00', 'Sabitle');
+  await expect(updated.locator('.badge', { hasText: 'Sabitlendi' })).toBeVisible();
+  await page.locator('summary', { hasText: /^Sabitlenenler$/ }).click();
+  await expect(page.locator('details', { has: page.locator('summary', { hasText: /^Sabitlenenler$/ }) }).getByText('kanal toplantısı 15:00')).toBeVisible();
+  await page.getByLabel('Mesajlarda ara').fill('toplantı'); await page.getByLabel('Mesajlarda ara').press('Enter');
+  await expect(page.getByRole('region', { name: 'Mesaj araması' }).locator('mark', { hasText: /toplantı/i }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Aramayı temizle' }).click();
+  const hello = await act('E2E merhaba ekip', 'Bilgi bankasına öner');
+  await hello.getByLabel('Kart başlığı').fill('E2E ekip notu'); await hello.getByLabel('Kategori').fill('Genel');
+  await hello.getByRole('button', { name: 'Taslak oluştur' }).click();
+  await expect(hello.getByRole('status')).toContainText('Taslak bilgi kartı oluşturuldu');
+  await act('E2E merhaba ekip', 'Sil');
+  await expect(log.getByText('Bu mesaj silindi.')).toBeVisible();
+  await expect(log.getByText('E2E merhaba ekip')).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/desktop-message-actions.png', fullPage: true });
+
   const direct = page.locator('details').filter({ has: page.locator('summary', { hasText: 'Yeni birebir mesaj' }) });
   await direct.locator('summary').click();
   await direct.getByLabel('Ada göre ara').fill('E2E Satış');
@@ -124,4 +149,13 @@ test('team messaging: channel, direct message, thread, unread badge, record conv
   await page.getByRole('button', { name: '← Konuşmalar' }).click();
   await expect(page.getByRole('heading', { name: 'Kanallar' })).toBeVisible();
   await page.goto(`/companies/${firm.id}`); expect(await noOverflow(page)).toBeTruthy();
+  // F8-07 mobile pass: actions menu, inline edit form and search results fit 390 px.
+  await page.goto('/messages'); await page.getByRole('link', { name: /#genel/ }).click();
+  const mobileItem = page.getByRole('log', { name: 'Mesajlar' }).locator('li.message').filter({ hasText: 'kanal toplantısı 15:00' });
+  await mobileItem.locator('summary', { hasText: 'İşlemler' }).click();
+  await expect(mobileItem.getByRole('button', { name: 'Sabitlemeyi kaldır' })).toBeVisible(); expect(await noOverflow(page)).toBeTruthy();
+  await page.screenshot({ path: 'test-results/mobile-message-actions.png', fullPage: true });
+  await page.getByRole('button', { name: '← Konuşmalar' }).click();
+  await page.getByLabel('Mesajlarda ara').fill('toplantı'); await page.getByLabel('Mesajlarda ara').press('Enter');
+  await expect(page.getByRole('region', { name: 'Mesaj araması' }).locator('mark').first()).toBeVisible(); expect(await noOverflow(page)).toBeTruthy();
 });

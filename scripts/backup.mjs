@@ -21,12 +21,14 @@ function command(tool, args, input) {
 }
 const sql = (database, statement) => command('psql', ['-U', dbUser, '-d', database, '-v', 'ON_ERROR_STOP=1', '-At', '-c', statement]).toString().trim();
 // Quote PDFs, knowledge attachments (Phase 6+) and message attachments (Phase 8+); older backups without those tables stay verifiable.
-// Infected message files are deleted from storage on detection and are deliberately not backed up.
+// Infected and retention-removed message files are deleted from storage and are deliberately not backed up.
 const fileKey = /^[a-f0-9]{64}\.(pdf|png|jpg|docx|xlsx|pptx|csv|txt)$/;
 const references = database => {
   const exists = table => sql(database, `SELECT to_regclass('public."${table}"') IS NOT NULL`) === 't';
   const knowledge = exists('KnowledgeAttachment') ? ` UNION ALL SELECT "fileKey", "checksum" FROM "KnowledgeAttachment"` : '';
-  const messages = exists('MessageAttachment') ? ` UNION ALL SELECT "fileKey", "checksum" FROM "MessageAttachment" WHERE "scanStatus" <> 'INFECTED'` : '';
+  // Files removed by message retention (F8-06) are deleted from storage; older schemas have no removedAt column.
+  const removedFilter = exists('MessageAttachment') && sql(database, `SELECT count(*) FROM information_schema.columns WHERE table_name = 'MessageAttachment' AND column_name = 'removedAt'`) === '1' ? '"removedAt" IS NULL' : 'true';
+  const messages = exists('MessageAttachment') ? ` UNION ALL SELECT "fileKey", "checksum" FROM "MessageAttachment" WHERE "scanStatus" <> 'INFECTED' AND ${removedFilter}` : '';
   return JSON.parse(sql(database, `SELECT COALESCE(json_agg(json_build_object('key', k, 'checksum', c)), '[]'::json) FROM (SELECT "pdfKey" AS k, "pdfChecksum" AS c FROM "QuoteVersion" WHERE "pdfKey" IS NOT NULL${knowledge}${messages}) refs`));
 };
 const mode = process.argv[2] ?? 'create';

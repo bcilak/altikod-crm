@@ -2,12 +2,13 @@ import { Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res } f
 import { ApiBody, ApiConsumes, ApiProduces, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { conversationCreateSchema, conversationListSchema, conversationMembersSchema, conversationPatchSchema, conversationReadSchema, directConversationSchema, messageCreateSchema, messageListSchema, recordConversationSchema } from '@saleshub/shared';
+import { conversationMuteSchema, messageEditSchema, messageHideSchema, messageKnowledgeSchema, messageSearchSchema, conversationCreateSchema, conversationListSchema, conversationMembersSchema, conversationPatchSchema, conversationReadSchema, directConversationSchema, messageCreateSchema, messageListSchema, recordConversationSchema } from '@saleshub/shared';
 import { Access, type AuthRequest } from '../security/access';
 import { ValidatedBody as Input, ZodValidationPipe as V } from '../validation.pipe';
 import { MessagingService } from './messaging.service';
 import { MessageAttachmentsService } from './attachments.service';
 import { MessagingStream } from './stream.service';
+import { MessageLifecycleService } from './lifecycle.service';
 
 const UUID = new ParseUUIDPipe();
 const userSearchSchema = z.object({ search: z.string().trim().max(100).optional() }).strict();
@@ -15,9 +16,10 @@ const userSearchSchema = z.object({ search: z.string().trim().max(100).optional(
 /** Team messaging (Phase 8). Every route needs messaging.use; channel management is checked per conversation in the service. */
 @ApiTags('messaging') @Access('messaging', 'use') @Controller('messaging')
 export class MessagingController {
-  constructor(private readonly messaging: MessagingService, private readonly attachments: MessageAttachmentsService, private readonly live: MessagingStream) {}
+  constructor(private readonly messaging: MessagingService, private readonly attachments: MessageAttachmentsService, private readonly live: MessagingStream, private readonly lifecycle: MessageLifecycleService) {}
   /**
-   * Server-Sent Events: `message` {conversationId, seq}, `attachment` {conversationId}, `notification` {} and `ready`.
+   * Server-Sent Events: `message` {conversationId, seq}, `attachment` {conversationId}, `update` {conversationId} (edit, delete,
+   * moderation, pin), `notification` {} and `ready`.
    * Events never contain message content; clients refetch through the regular endpoints. Reconnect after `retry`.
    */
   @ApiProduces('text/event-stream') @Get('stream') stream(@Req() r: AuthRequest, @Res() res: Response) { return this.live.subscribe(r.actor, r, res); }
@@ -49,4 +51,17 @@ export class MessagingController {
     res.setHeader('Content-Disposition', `${disposition}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(file.name)}`);
     res.send(file.bytes);
   }
+  @Get('search') search(@Req() r: AuthRequest, @Query(new V(messageSearchSchema)) q: z.infer<typeof messageSearchSchema>) { return this.lifecycle.search(r.actor, q.q, q.conversationId); }
+  @Get('conversations/:id/pins') pins(@Req() r: AuthRequest, @Param('id', UUID) id: string) { return this.lifecycle.pins(r.actor, id); }
+  @Post('conversations/:id/mute') mute(@Req() r: AuthRequest, @Param('id', UUID) id: string, @Input(conversationMuteSchema) b: z.infer<typeof conversationMuteSchema>) { return this.lifecycle.mute(r.actor, id, b.until); }
+  /** Author only, within 15 minutes; the previous text goes to the edit history. */
+  @Patch('messages/:id') edit(@Req() r: AuthRequest, @Param('id', UUID) id: string, @Input(messageEditSchema) b: z.infer<typeof messageEditSchema>) { return this.lifecycle.edit(r.actor, id, b.body); }
+  @Get('messages/:id/revisions') revisions(@Req() r: AuthRequest, @Param('id', UUID) id: string) { return this.lifecycle.revisions(r.actor, id); }
+  @Post('messages/:id/delete') deleteMessage(@Req() r: AuthRequest, @Param('id', UUID) id: string) { return this.lifecycle.remove(r.actor, id); }
+  @Post('messages/:id/hide') hide(@Req() r: AuthRequest, @Param('id', UUID) id: string, @Input(messageHideSchema) b: z.infer<typeof messageHideSchema>) { return this.lifecycle.hide(r.actor, id, b.reason); }
+  @Post('messages/:id/unhide') unhide(@Req() r: AuthRequest, @Param('id', UUID) id: string) { return this.lifecycle.hide(r.actor, id, null); }
+  @Post('messages/:id/pin') pin(@Req() r: AuthRequest, @Param('id', UUID) id: string) { return this.lifecycle.pin(r.actor, id, true); }
+  @Post('messages/:id/unpin') unpin(@Req() r: AuthRequest, @Param('id', UUID) id: string) { return this.lifecycle.pin(r.actor, id, false); }
+  /** Draft knowledge card from a message (requires knowledge.write); goes through the normal review and publish flow. */
+  @Post('messages/:id/knowledge') knowledge(@Req() r: AuthRequest, @Param('id', UUID) id: string, @Input(messageKnowledgeSchema) b: z.infer<typeof messageKnowledgeSchema>) { return this.lifecycle.toKnowledge(r.actor, id, b); }
 }

@@ -10,13 +10,22 @@ import { projectScope } from '../delivery/projects.service';
 type RecordType = typeof conversationRecordTypes[number];
 const userCard = { select: { id: true, name: true, isActive: true } } as const;
 export const attachmentSelect = { id: true, name: true, mimeType: true, size: true, scanStatus: true } as const;
-const messageSelect = { id: true, seq: true, conversationId: true, parentId: true, body: true, createdAt: true, author: userCard, attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } }, mentions: { select: { user: { select: { id: true, name: true } } } } } as const satisfies Prisma.MessageSelect;
+export const messageSelect = { id: true, seq: true, conversationId: true, parentId: true, body: true, createdAt: true, editedAt: true, deletedAt: true, hiddenAt: true, hiddenReason: true, pinnedAt: true, expiredAt: true, author: userCard, attachments: { where: { removedAt: null }, select: attachmentSelect, orderBy: { createdAt: 'asc' } }, mentions: { select: { user: { select: { id: true, name: true } } } } } as const satisfies Prisma.MessageSelect;
 type MessageRow = Prisma.MessageGetPayload<{ select: typeof messageSelect }>;
-const shape = <T extends MessageRow>({ mentions, ...m }: T) => ({ ...m, mentions: mentions.map(x => x.user) });
+export type MessageState = 'ACTIVE' | 'DELETED' | 'HIDDEN' | 'EXPIRED';
+export const messageState = (m: { deletedAt: Date | null; hiddenAt: Date | null; expiredAt: Date | null }): MessageState => m.expiredAt ? 'EXPIRED' : m.deletedAt ? 'DELETED' : m.hiddenAt ? 'HIDDEN' : 'ACTIVE';
+/** Deleted, hidden and expired messages keep their place in the conversation but never expose text, files or mentions. */
+export const shape = <T extends MessageRow>({ mentions, deletedAt, hiddenAt, hiddenReason, expiredAt, ...m }: T) => {
+  const state = messageState({ deletedAt, hiddenAt, expiredAt });
+  return state === 'ACTIVE' ? { ...m, state, hiddenReason: null, mentions: mentions.map(x => x.user) }
+    : { ...m, state, body: '', attachments: [], mentions: [], pinnedAt: null, hiddenReason: state === 'HIDDEN' ? hiddenReason : null };
+};
+/** Rows that still carry content (search, notifications, pins). */
+export const activeMessage = { deletedAt: null, hiddenAt: null, expiredAt: null } as const;
 export type MessageNotificationType = 'MESSAGE_MENTION' | 'MESSAGE_DIRECT' | 'MESSAGE_REPLY';
 const listInclude = (actorId: string) => ({
   members: { where: { leftAt: null }, select: { userId: true, role: true, user: userCard } },
-  reads: { where: { userId: actorId }, select: { lastReadSeq: true } },
+  reads: { where: { userId: actorId }, select: { lastReadSeq: true, mutedUntil: true } },
   company: { select: { id: true, displayName: true } }, opportunity: { select: { id: true, title: true } }, project: { select: { id: true, title: true } },
 }) satisfies Prisma.ConversationInclude;
 type Row = Prisma.ConversationGetPayload<{ include: ReturnType<typeof listInclude> }>;
@@ -36,6 +45,11 @@ export function conversationScope(actor: Pick<Actor, 'id' | 'role'>): Prisma.Con
 }
 
 /** Writing follows the record's write scope; technicians may write wherever they can see a project. VIEWER never writes outside direct messages. */
+/** Moderation (hiding someone else's message with a reason): channels by channel managers, record conversations by managers. Private groups and direct messages have no moderator. */
+export async function canModerate(db: Db, actor: Actor, c: Pick<Row, 'kind'>) {
+  if (c.kind === 'CHANNEL') return can(db, actor, 'messaging', 'channels.manage');
+  return c.kind === 'RECORD' && isManager(actor);
+}
 export async function canPost(db: Db, actor: Actor, c: Pick<Row, 'id' | 'kind' | 'archivedAt' | 'postingRestricted' | 'companyId' | 'opportunityId' | 'projectId'>) {
   if (c.archivedAt) return false;
   if (c.kind !== 'RECORD') {
@@ -70,6 +84,7 @@ export class MessagingService {
       archivedAt: c.archivedAt, lastSeq: c.lastSeq, lastMessageAt: c.lastMessageAt, record, directUser: other ?? null,
       joined: followed, myRole: me?.role ?? null, memberCount: c.kind === 'RECORD' ? null : c.members.length,
       unread: followed ? Math.max(0, c.lastSeq - (c.reads[0]?.lastReadSeq ?? 0)) : 0,
+      mutedUntil: c.reads[0]?.mutedUntil && c.reads[0].mutedUntil > new Date() ? c.reads[0].mutedUntil : null,
     };
   }
   private async visible(db: Db, actor: Actor, id: string) {
@@ -95,12 +110,13 @@ export class MessagingService {
       include: listInclude(actor.id), orderBy: [{ lastMessageAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'asc' }], take: 500,
     });
     const items = rows.map(row => this.dto(actor, row));
-    return { items, unreadTotal: items.reduce((sum, c) => sum + c.unread, 0) };
+    // Muted conversations still show their own count but stay out of the menu total.
+    return { items, unreadTotal: items.reduce((sum, c) => sum + (c.mutedUntil ? 0 : c.unread), 0) };
   }
   async get(actor: Actor, id: string) {
     const row = await this.visible(this.prisma, actor, id);
     const canManage = row.kind === 'CHANNEL' ? await can(this.prisma, actor, 'messaging', 'channels.manage') : row.kind === 'GROUP' && row.members.some(m => m.userId === actor.id && m.role === 'OWNER');
-    return { ...this.dto(actor, row), canPost: await canPost(this.prisma, actor, row), canManage,
+    return { ...this.dto(actor, row), canPost: await canPost(this.prisma, actor, row), canManage, canModerate: await canModerate(this.prisma, actor, row), canSuggestKnowledge: await can(this.prisma, actor, 'knowledge', 'write'),
       members: row.kind === 'RECORD' ? [] : row.members.map(m => ({ ...m.user, role: m.role })).sort((a, b) => a.name.localeCompare(b.name, 'tr')) };
   }
   async create(actor: Actor, input: z.infer<typeof conversationCreateSchema>) {
@@ -254,7 +270,7 @@ export class MessagingService {
         const row = await this.visible(db, actor, id);
         if (row.archivedAt) throw new ConflictException('Arşivlenmiş konuşmaya yazılamaz');
         if (!await canPost(db, actor, row)) throw new ForbiddenException('Bu konuşmaya yazma yetkiniz yok');
-        if (input.parentId && !await db.message.findFirst({ where: { id: input.parentId, conversationId: id, parentId: null }, select: { id: true } })) throw new NotFoundException('Yanıtlanan mesaj bulunamadı');
+        if (input.parentId && !await db.message.findFirst({ where: { id: input.parentId, conversationId: id, parentId: null, ...activeMessage }, select: { id: true } })) throw new NotFoundException('Yanıtlanan mesaj bulunamadı');
         const mentioned = await this.mentionable(db, actor, row, input.mentionIds);
         if (input.attachmentIds.length && await db.messageAttachment.count({ where: { id: { in: input.attachmentIds }, conversationId: id, uploadedById: actor.id, messageId: null, scanStatus: { in: ['PENDING', 'CLEAN', 'UNSCANNED'] } } }) !== input.attachmentIds.length) {
           throw new ConflictException('Eklerden biri bulunamadı, başka bir mesajda kullanıldı veya güvenlik taramasından geçemedi');
@@ -291,22 +307,29 @@ export class MessagingService {
   /**
    * One notification per recipient and message: a mention wins over a direct message, which wins over a thread reply.
    * Thread reply recipients are the parent's author and earlier repliers who can still see the conversation. Plain channel
-   * messages notify nobody (the unread counter covers them). The payload is only the message id; content is never copied.
+   * messages notify nobody (the unread counter covers them). People who muted the conversation are notified only when
+   * mentioned. The payload is only the message id; content is never copied.
    */
   private async notify(db: Db, actor: Actor, conversation: Row, messageId: string, parentId: string | undefined, mentioned: string[]) {
     const recipients = new Map<string, MessageNotificationType>(mentioned.map(id => [id, 'MESSAGE_MENTION']));
-    if (conversation.kind === 'DIRECT') for (const m of conversation.members) if (m.userId !== actor.id && m.user.isActive && !recipients.has(m.userId)) recipients.set(m.userId, 'MESSAGE_DIRECT');
+    const muted = new Set((await db.conversationReadState.findMany({ where: { conversationId: conversation.id, mutedUntil: { gt: new Date() } }, select: { userId: true } })).map(r => r.userId));
+    if (conversation.kind === 'DIRECT') for (const m of conversation.members) if (m.userId !== actor.id && m.user.isActive && !recipients.has(m.userId) && !muted.has(m.userId)) recipients.set(m.userId, 'MESSAGE_DIRECT');
     if (parentId) {
       const thread = await db.message.findMany({ where: { OR: [{ id: parentId }, { parentId }], authorId: { notIn: [actor.id, ...recipients.keys()] }, author: { isActive: true } }, distinct: ['authorId'], select: { author: { select: { id: true, role: true } } } });
-      for (const { author } of thread) if (await db.conversation.findFirst({ where: { AND: [{ id: conversation.id }, conversationScope(author)] }, select: { id: true } })) recipients.set(author.id, 'MESSAGE_REPLY');
+      for (const { author } of thread) if (!muted.has(author.id) && await db.conversation.findFirst({ where: { AND: [{ id: conversation.id }, conversationScope(author)] }, select: { id: true } })) recipients.set(author.id, 'MESSAGE_REPLY');
     }
     if (recipients.size) await db.notification.createMany({ data: [...recipients].map(([userId, type]) => ({ userId, messageId, type, dedupeKey: `message:${messageId}:${userId}` })), skipDuplicates: true });
   }
   /** For the notification list: what the reader may see about each message, resolved with the reader's current access. */
   async notificationTargets(actor: Actor, messageIds: string[]) {
     if (!messageIds.length) return new Map<string, { conversationId: string; conversation: string | null; author: string; parentId: string | null }>();
-    const rows = await this.prisma.message.findMany({ where: { id: { in: messageIds }, conversation: conversationScope(actor) }, select: { id: true, parentId: true, author: { select: { name: true } }, conversation: { include: listInclude(actor.id) } } });
+    const rows = await this.prisma.message.findMany({ where: { id: { in: messageIds }, ...activeMessage, conversation: conversationScope(actor) }, select: { id: true, parentId: true, author: { select: { name: true } }, conversation: { include: listInclude(actor.id) } } });
     return new Map(rows.map(r => { const c = this.dto(actor, r.conversation); return [r.id, { conversationId: c.id, conversation: c.kind === 'CHANNEL' ? `#${c.name}` : c.name, author: r.author.name, parentId: r.parentId }]; }));
+  }
+  /** Display names of conversations the actor can see (search results). */
+  async describe(actor: Actor, ids: string[]) {
+    const rows = await this.prisma.conversation.findMany({ where: { AND: [{ id: { in: ids } }, conversationScope(actor)] }, include: listInclude(actor.id) });
+    return new Map(rows.map(r => { const c = this.dto(actor, r); return [c.id, { id: c.id, kind: c.kind, name: c.kind === 'CHANNEL' ? `#${c.name}` : c.name, record: c.record }]; }));
   }
   async read(actor: Actor, id: string, seq: number) {
     const row = await this.visible(this.prisma, actor, id);

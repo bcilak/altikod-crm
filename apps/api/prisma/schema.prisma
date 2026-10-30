@@ -691,6 +691,7 @@ model ConversationReadState {
   userId         String       @db.Uuid
   user           User         @relation(fields: [userId], references: [id])
   lastReadSeq    Int          @default(0)
+  mutedUntil     DateTime?    @db.Timestamptz(6)
   updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
 
   @@id([conversationId, userId])
@@ -713,11 +714,23 @@ model Message {
   body           String
   clientNonce    String
   createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  editedAt       DateTime?    @db.Timestamptz(6)
+  deletedAt      DateTime?    @db.Timestamptz(6)
+  deletedById    String?      @db.Uuid
+  hiddenAt       DateTime?    @db.Timestamptz(6)
+  hiddenById     String?      @db.Uuid
+  hiddenReason   String?
+  pinnedAt       DateTime?    @db.Timestamptz(6)
+  pinnedById     String?      @db.Uuid
+  expiredAt      DateTime?    @db.Timestamptz(6)
+  revisions      MessageRevision[]
 
   @@unique([conversationId, seq])
   @@unique([authorId, clientNonce])
   @@index([conversationId, parentId, seq])
   @@index([parentId, seq])
+  @@index([conversationId, pinnedAt])
+  @@index([createdAt])
 }
 
 // Phase 8 (F8-04): files shared in messages. Uploaded first as drafts (messageId null), then linked once to a message.
@@ -745,6 +758,7 @@ model MessageAttachment {
   scanAttempts Int @default(0)
   scanSignature String?
   scannedAt DateTime? @db.Timestamptz(6)
+  removedAt DateTime? @db.Timestamptz(6)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   @@index([messageId])
   @@index([conversationId, createdAt])
@@ -760,4 +774,14 @@ model MessageMention {
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
   @@id([messageId, userId])
   @@index([userId])
+}
+
+// Phase 8 (F8-06): earlier texts of an edited message, written by a database trigger so history cannot be skipped.
+model MessageRevision {
+  id String @id @default(uuid()) @db.Uuid
+  messageId String @db.Uuid
+  message Message @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  body String
+  createdAt DateTime @db.Timestamptz(6)
+  @@index([messageId, createdAt])
 }

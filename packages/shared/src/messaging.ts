@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { uuid } from './crm';
+import { dateTime, uuid } from './crm';
 
 export const conversationKinds = ['CHANNEL', 'GROUP', 'DIRECT', 'RECORD'] as const;
 export const conversationKindLabels: Record<typeof conversationKinds[number], string> = { CHANNEL: 'Kanal', GROUP: 'Özel grup', DIRECT: 'Birebir', RECORD: 'Kayıt konuşması' };
@@ -19,6 +19,9 @@ export const messageAttachmentAccept = '.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx,.
 export const messageAttachmentMaxBytes = 20 * 1024 * 1024;
 export const messageAttachmentsPerMessage = 5;
 export const messageMentionsPerMessage = 20;
+export const messageEditWindowMs = 15 * 60_000;
+export const messagePinsPerConversation = 20;
+export const messageStateLabels: Record<string, string> = { DELETED: 'Bu mesaj silindi.', HIDDEN: 'Bu mesaj bir yönetici tarafından gizlendi.', EXPIRED: 'Saklama süresi dolduğu için kaldırıldı.' };
 export const messageNotificationLabels: Record<string, string> = { MESSAGE_MENTION: 'Sizden bahsedildi', MESSAGE_DIRECT: 'Yeni birebir mesaj', MESSAGE_REPLY: 'Mesaj dizinize yanıt geldi' };
 export const attachmentScanLabels: Record<string, string> = { PENDING: 'Güvenlik taraması sürüyor', CLEAN: 'Tarandı', INFECTED: 'Zararlı içerik tespit edildi; indirilemez', FAILED: 'Tarama tamamlanamadı; indirilemez', UNSCANNED: 'Taranmadı (yalnız geliştirme ortamı)' };
 
@@ -44,3 +47,9 @@ export const messageCreateSchema = z.object({ body: messageBodySchema.default(''
 export const messageListSchema = z.object({ beforeSeq: z.coerce.number().int().positive().optional(), afterSeq: z.coerce.number().int().min(0).optional(), parentId: uuid.optional(), limit: z.coerce.number().int().min(1).max(100).default(50) }).strict()
   .refine(q => q.beforeSeq === undefined || q.afterSeq === undefined, 'beforeSeq ve afterSeq birlikte kullanılamaz');
 export const conversationReadSchema = z.object({ seq: z.number().int().min(0) }).strict();
+export const messageEditSchema = z.object({ body: messageBodySchema }).strict();
+export const messageHideSchema = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
+/** null unmutes; a far-future date is “until I unmute”. */
+export const conversationMuteSchema = z.object({ until: dateTime.nullable() }).strict();
+export const messageSearchSchema = z.object({ q: z.string().trim().min(2).max(100), conversationId: uuid.optional() }).strict();
+export const messageKnowledgeSchema = z.object({ title: z.string().trim().min(1).max(200), category: z.string().trim().min(1).max(100) }).strict();

@@ -151,6 +151,11 @@ test('Phase 8 (F8-05): mentions, message notifications and live updates', async 
       await call(salesA, 'post', `/messaging/conversations/${dm.id}/messages`, { body: '', clientNonce: nonce(), attachmentIds: [file.body.id] }).expect(201);
       await db.messageAttachment.update({ where: { id: file.body.id }, data: { scanStatus: 'CLEAN', scannedAt: new Date() } });
       await until(() => got(b, 'attachment', dm.id) === 1);
+      // Edits (and deletions, moderation, pins) are signalled as `update` so open conversations refresh.
+      const editable = (await post(salesA, dm.id, 'Düzenlenecek').expect(201)).body;
+      await call(salesA, 'patch', `/messaging/messages/${editable.id}`, { body: 'Düzenlendi' }).expect(200);
+      await until(() => got(b, 'update', dm.id) >= 1);
+      assert.equal(got(outsider, 'update', dm.id), 0);
     });
 
     await t.test('streams close when the session ends or the user is deactivated; per-user connection limit', async () => {

@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type Me } from '../../../lib/api';
-import { conversationKindLabels, conversationsKey, displayName, recordLabels, recordPath, roleLabels, type Colleague, type Conversation, type ConversationDetail, type ConversationKind, type ConversationList } from '../../../lib/messaging';
-import { ConversationFiles, MessageStream } from '../../../components/conversation';
+import { api, formatDate, type Me } from '../../../lib/api';
+import { conversationKindLabels, conversationsKey, displayName, recordLabels, recordPath, roleLabels, type Colleague, type Conversation, type ConversationDetail, type ConversationKind, type ConversationList, type SearchHit } from '../../../lib/messaging';
+import { ConversationFiles, MessageStream, PinnedMessages } from '../../../components/conversation';
 import { useLiveIntervals } from '../../../components/live';
 import { Action, Badge, Editor, Loading, Notice, Title, useData, useMe } from '../../../components/ui';
 
@@ -52,8 +52,17 @@ function ConversationInfo({ c, me, leave }: { c: ConversationDetail; me: Me; lea
   const [adding, setAdding] = useState<string[]>([]); const cache = useQueryClient();
   const add = useSubmit(async () => { await api(`/messaging/conversations/${c.id}/members`, 'POST', { userIds: adding }); setAdding([]); await cache.invalidateQueries({ queryKey: conversationsKey }); await cache.invalidateQueries({ queryKey: [`/messaging/conversations/${c.id}`] }); });
   const leavable = (c.kind === 'CHANNEL' || c.kind === 'GROUP') && c.joined;
+  const [muteError, setMuteError] = useState<unknown>();
+  const setMute = async (choice: string) => {
+    const until = choice === 'off' ? null : new Date(Date.now() + (choice === 'forever' ? 100 * 365 * 24 : Number(choice)) * 3600_000).toISOString();
+    setMuteError(undefined);
+    try { await api(`/messaging/conversations/${c.id}/mute`, 'POST', { until }); await cache.invalidateQueries(); } catch (e) { setMuteError(e); }
+  };
   return <Editor title={c.kind === 'RECORD' ? 'Konuşma bilgisi' : `Konuşma bilgisi · ${c.memberCount} üye`}>
     {c.topic && <p className="prewrap">{c.topic}</p>}
+    <label className="mute-control">Sessize al{c.mutedUntil && <small className="muted"> · şu an sessiz ({new Date(c.mutedUntil).getFullYear() > new Date().getFullYear() + 50 ? 'siz açana kadar' : `${formatDate(c.mutedUntil)} kadar`})</small>}
+      <select aria-label="Sessize al" value="" onChange={e => void setMute(e.target.value)}><option value="" disabled>Seçin</option><option value="1">1 saat</option><option value="8">8 saat</option><option value="168">1 hafta</option><option value="forever">Ben açana kadar</option>{c.mutedUntil && <option value="off">Sessizi kapat</option>}</select>
+      <small className="muted">Sessizdeki konuşma menü sayacına katılmaz ve yalnız sizden bahsedildiğinde bildirim üretir.</small></label><Notice error={muteError} />
     {c.kind === 'RECORD' && c.record && <p>Bu konuşma <Link className="text-link" href={`${recordPath[c.record.type]}/${c.record.id}`}>{recordLabels[c.record.type].toLocaleLowerCase('tr-TR')} kaydına</Link> bağlıdır. Kayda erişimi olan herkes görür; erişimi kalkan kişi göremez.</p>}
     {c.kind !== 'RECORD' && <ul className="member-list">{c.members.map(m => <li key={m.id} className="record"><span>{m.name}{!m.isActive && ' (pasif)'}{m.role === 'OWNER' && c.kind === 'GROUP' && <> <Badge>Sahip</Badge></>}</span>
       {c.canManage && !c.archivedAt && m.id !== me.id && m.role !== 'OWNER' && c.kind !== 'DIRECT' && <Action confirm={`${m.name} konuşmadan çıkarılsın mı? Geçmiş mesajları göremez.`} run={() => api(`/messaging/conversations/${c.id}/members/${m.id}/remove`, 'POST')}>Çıkar</Action>}</li>)}</ul>}
@@ -79,9 +88,30 @@ function ActiveConversation({ id, me, close }: { id: string; me: Me; close: () =
       <div><h2>{displayName(c)}</h2><p className="muted">{c.record ? `${recordLabels[c.record.type]} konuşması` : conversationKindLabels[c.kind]}{c.kind === 'CHANNEL' && !c.isPublic ? ' · özel' : ''}{c.topic ? ` · ${c.topic}` : ''}</p></div></header>
     {c.kind === 'CHANNEL' && !c.joined && !c.archivedAt && <div className="notice">Bu kanalı okuyabilirsiniz. Yazmak ve okunmamış sayısını görmek için katılın. <Action run={async () => { await api(`/messaging/conversations/${c.id}/join`, 'POST'); await cache.invalidateQueries(); }}>Kanala katıl</Action></div>}
     {blocked && <p className="notice">{blocked}</p>}
-    <MessageStream key={c.id} conversationId={c.id} meId={me.id} canPost={c.canPost} />
+    <MessageStream key={c.id} conversationId={c.id} meId={me.id} canPost={c.canPost} abilities={c} />
+    <Editor title="Sabitlenenler"><PinnedMessages conversationId={c.id} /></Editor>
     <Editor title="Dosyalar"><ConversationFiles conversationId={c.id} /></Editor>
     <ConversationInfo c={c} me={me} leave={async () => { await api(`/messaging/conversations/${c.id}/leave`, 'POST'); close(); }} />
+  </section>;
+}
+
+/** Highlights the searched words in plain text without interpreting it. */
+function Highlight({ text, words }: { text: string; words: string[] }) {
+  if (!words.length) return <>{text}</>;
+  const pattern = new RegExp(`(${words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'giu');
+  return <>{text.split(pattern).map((part, i) => i % 2 ? <mark key={i}>{part}</mark> : part)}</>;
+}
+function MessageSearch() {
+  const [input, setInput] = useState(''); const [q, setQ] = useState('');
+  const results = useQuery({ queryKey: ['messaging-search', q], queryFn: () => api<{ items: SearchHit[] }>(`/messaging/search?q=${encodeURIComponent(q)}`), enabled: q.length >= 2, retry: false });
+  const words = q.match(/[\p{L}\p{N}]+/gu) ?? [];
+  return <section aria-label="Mesaj araması" className="message-search">
+    <form role="search" onSubmit={e => { e.preventDefault(); setQ(input.trim()); }}><label>Mesajlarda ara<input type="search" value={input} minLength={2} maxLength={100} onChange={e => { setInput(e.target.value); if (!e.target.value) setQ(''); }} placeholder="Kelime veya dosya adı" /></label></form>
+    {q.length >= 2 && <div className="search-results"><Notice error={results.error} />{results.isLoading && <p role="status" className="muted">Aranıyor…</p>}
+      {results.data && <p className="muted" role="status">{results.data.items.length ? `${results.data.items.length} sonuç${results.data.items.length === 50 ? ' (ilk 50)' : ''}` : 'Sonuç yok.'}</p>}
+      <ul>{results.data?.items.map(h => <li key={h.message.id}><Link className="chat-link search-hit" href={`/messages?c=${h.conversation.id}`}><span className="chat-name"><small className="muted block">{displayName(h.conversation)} · {h.message.author.name} · {formatDate(h.message.createdAt)}</small>
+        <Highlight text={(h.message.body || h.message.attachments.map(a => a.name).join(', ')).slice(0, 240)} words={words} /></span></Link></li>)}</ul>
+      <button type="button" className="link-button" onClick={() => { setInput(''); setQ(''); }}>Aramayı temizle</button></div>}
   </section>;
 }
 
@@ -96,9 +126,10 @@ function Messages() {
   return <><Title title="Mesajlar" subtitle="Ekip içi yazışma: kanallar, birebir mesajlar, özel gruplar ve firma, fırsat, proje kayıtlarına bağlı konuşmalar. Yeni mesajlar anında görünür; canlı bağlantı koparsa birkaç saniyede bir yenilenir." />
     <div className={`chat-layout${active ? ' has-active' : ''}`}>
       <nav className="chat-list" aria-label="Konuşmalar">
+        <MessageSearch />
         <Notice error={list.error} />{list.isLoading && <Loading />}
         {list.data && sections.map(s => { const items = list.data.items.filter(c => c.kind === s.kind); return <section key={s.kind}><h2>{s.title}</h2>{items.length === 0 ? <p className="muted chat-empty">{s.empty}</p> : <ul>{items.map(c => <li key={c.id}>
-          <Link href={`/messages?c=${c.id}`} className="chat-link" aria-current={c.id === active ? 'page' : undefined}><span className="chat-name">{displayName(c)}{c.archivedAt && <small className="muted"> · arşiv</small>}{c.kind === 'CHANNEL' && !c.joined && <small className="muted"> · katılmadınız</small>}{c.record && <small className="muted block">{recordLabels[c.record.type]}</small>}</span>
+          <Link href={`/messages?c=${c.id}`} className="chat-link" aria-current={c.id === active ? 'page' : undefined}><span className="chat-name">{displayName(c)}{c.archivedAt && <small className="muted"> · arşiv</small>}{c.kind === 'CHANNEL' && !c.joined && <small className="muted"> · katılmadınız</small>}{c.mutedUntil && <small className="muted"> · sessiz</small>}{c.record && <small className="muted block">{recordLabels[c.record.type]}</small>}</span>
             {c.unread > 0 && <span className="unread" aria-label={`${c.unread} okunmamış mesaj`}>{c.unread > 99 ? '99+' : c.unread}</span>}</Link></li>)}</ul>}</section>; })}
         <NewConversation key={formsKey} me={me} open={go} />
       </nav>

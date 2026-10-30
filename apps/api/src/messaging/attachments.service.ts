@@ -5,7 +5,7 @@ import { AttachmentScanStatus, Prisma } from '../generated/prisma/client';
 import { Actor } from '../security/access';
 import { audit } from '../security/policy';
 import { FilesService } from '../sales/files.service';
-import { attachmentSelect, canPost, conversationScope } from './messaging.service';
+import { activeMessage, attachmentSelect, canPost, conversationScope } from './messaging.service';
 import { detectMessageFile, FileTypeError } from './file-types';
 import { MalwareScanner, type ScanResult } from './scanner';
 
@@ -59,12 +59,15 @@ export class MessageAttachmentsService implements OnModuleInit, OnModuleDestroy 
   /** The conversation's “Dosyalar” view: files of sent messages only, newest first. */
   async list(actor: Actor, conversationId: string) {
     await this.conversation(actor, conversationId);
-    return this.prisma.messageAttachment.findMany({ where: { conversationId, messageId: { not: null } }, orderBy: { createdAt: 'desc' }, take: 200,
+    return this.prisma.messageAttachment.findMany({ where: { conversationId, removedAt: null, message: activeMessage }, orderBy: { createdAt: 'desc' }, take: 200,
       select: { ...attachmentSelect, createdAt: true, uploadedBy: { select: { id: true, name: true } }, message: { select: { id: true, seq: true, parentId: true } } } });
   }
-  /** Visible to everyone who can see the conversation once sent; before that only to the uploader. Only scanned files are released. */
+  /**
+   * Visible to everyone who can see the conversation once sent; before that only to the uploader. Only scanned files are
+   * released, and never once the message was deleted, hidden or expired, or the file removed by retention.
+   */
   async download(actor: Actor, id: string) {
-    const row = await this.prisma.messageAttachment.findFirst({ where: { id, conversation: conversationScope(actor), OR: [{ messageId: { not: null } }, { uploadedById: actor.id }] } });
+    const row = await this.prisma.messageAttachment.findFirst({ where: { id, removedAt: null, conversation: conversationScope(actor), OR: [{ message: activeMessage }, { messageId: null, uploadedById: actor.id }] } });
     if (!row) throw new NotFoundException('Dosya bulunamadı');
     const reason = row.scanStatus === 'UNSCANNED' && process.env.NODE_ENV === 'production' ? blocked.PENDING : blocked[row.scanStatus];
     if (reason) throw new ConflictException(reason);
@@ -106,10 +109,12 @@ export class MessageAttachmentsService implements OnModuleInit, OnModuleDestroy 
     }
     return rows.length;
   }
-  /** Storage is content-addressed and shared with quote PDFs and knowledge files, so a file is deleted only when nothing usable points to it. */
-  private async removeIfUnreferenced(key: string) {
-    const where: Prisma.MessageAttachmentWhereInput = { fileKey: key, scanStatus: { not: 'INFECTED' } };
-    const [messages, knowledge, quotes] = await Promise.all([this.prisma.messageAttachment.count({ where }), this.prisma.knowledgeAttachment.count({ where: { fileKey: key } }), this.prisma.quoteVersion.count({ where: { pdfKey: key } })]);
-    if (!messages && !knowledge && !quotes) await this.files.remove(key);
-  }
+  private removeIfUnreferenced(key: string) { return removeIfUnreferenced(this.prisma, this.files, key); }
+}
+
+/** Storage is content-addressed and shared with quote PDFs and knowledge files, so a file is deleted only when nothing usable points to it. */
+export async function removeIfUnreferenced(prisma: PrismaService, files: FilesService, key: string) {
+  const where: Prisma.MessageAttachmentWhereInput = { fileKey: key, scanStatus: { not: 'INFECTED' }, removedAt: null };
+  const [messages, knowledge, quotes] = await Promise.all([prisma.messageAttachment.count({ where }), prisma.knowledgeAttachment.count({ where: { fileKey: key } }), prisma.quoteVersion.count({ where: { pdfKey: key } })]);
+  if (!messages && !knowledge && !quotes) await files.remove(key);
 }

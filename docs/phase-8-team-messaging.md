@@ -1,6 +1,6 @@
 # Faz 8 — ekip içi mesajlaşma ve belge paylaşımı
 
-30 Ekim 2026. **Durum:** F8-01 kararları önerilen varsayılanlarla kabul edildi. **F8-02 (API çekirdeği) uygulandı ve test edildi**; ekran (F8-03), dosya ekleri (F8-04), canlı akış ve bildirim (F8-05), arama/düzenleme/silme/saklama (F8-06) henüz yok. Kullanıcıların bugün açabileceği bir mesajlaşma ekranı bulunmaz. Teslim edilenlerin kaydı aşağıda “F8-02 teslimatı” bölümündedir. Faz 7 (entegrasyonlar ve AI) kapsam dışı kaldığı için bu iş Faz 8 olarak numaralandı; dış sisteme bağlanmadığı için Faz 7 kararıyla çelişmez.
+30 Ekim 2026. **Durum:** F8-01 kararları önerilen varsayılanlarla kabul edildi. **F8-02 (API çekirdeği) ve F8-03 (ekranlar, yoklamayla güncellenen ilk kullanılabilir sürüm) uygulandı ve test edildi.** Dosya ekleri (F8-04), canlı akış ve bildirim (F8-05), arama/düzenleme/silme/saklama (F8-06) ve gerçek kullanıcılarla pilot (F8-07) henüz yok; bu nedenle ekip belge paylaşımını şimdilik CRM'e taşıyamaz. Teslim kayıtları aşağıda “F8-02 teslimatı” ve “F8-03 teslimatı” bölümlerindedir. Faz 7 (entegrasyonlar ve AI) kapsam dışı kaldığı için bu iş Faz 8 olarak numaralandı; dış sisteme bağlanmadığı için Faz 7 kararıyla çelişmez.
 
 ## Sorun
 
@@ -170,6 +170,31 @@ F8-03 sonunda polling ile kullanılabilir bir sürüm olur; canlılık (F8-05) a
 - Lint, TypeScript, birim/smoke testleri (OpenAPI'de mesajlaşma uçları dahil) ve üretim derlemesi geçti.
 - 52 PostgreSQL entegrasyon kontrolü en az yetkili uygulama rolüyle geçti; bunların 10'u Faz 8: başlangıç kanalları ve yazma kısıtı, kanal yönetimi ve ad tekilliği, özel grup/birebir gizliliği (ADMIN dahil), firma paylaşımı READ/WRITE/NONE geçişlerinin aynı oturumda anında etkisi ve arşivli firma, fırsat konuşmasının teknik personele kapalı olması ve proje konuşmasında yalnız atanmış teknik personel, eşzamanlı tekrar gönderimde tek mesaj ve boşluksuz sıra, okunmamış sayıları/okundu/yanıt/sayfalama, metin doğrulaması ve DB düzeyinde değişmezlik, pasif kullanıcı. En az yetki testi uygulama rolünün mesaj tetikleyicisini kaldıramadığını da doğrular.
 - Ortam notu: bu oturumdaki konteynerde önceden kurulu Chromium, projenin Playwright sürümünün beklediği klasör adında değildi; Faz 4 PDF testleri için yalnız yerelde `PLAYWRIGHT_BROWSERS_PATH` ile aynı tarayıcıya bağlantı verildi, repoda değişiklik yapılmadı. Playwright E2E senaryosu bu fazda eklenmedi (ekran yok).
+
+## F8-03 teslimatı
+
+### Kullanım
+
+1. Yan menüdeki **Mesajlar** bağlantısı okunmamış toplamını gösterir (15 saniyede bir yenilenir).
+2. **Mesajlar** sayfasında solda Kanallar, Birebir, Özel gruplar ve Takip edilen kayıtlar listelenir; her satırda okunmamış sayısı vardır. Katılınmamış herkese açık kanal “katılmadınız” olarak görünür, okunabilir, “Kanala katıl” ile yazılabilir hâle gelir.
+3. Listenin altındaki **Yeni birebir mesaj**, **Yeni özel grup** ve (ADMIN/MANAGER için) **Yeni kanal** formlarıyla konuşma başlatılır. Kişi seçici yalnız ad ve rol gösterir. Grup formunda görüntüleyici rolündeki kişiler listelenmez.
+4. Konuşma açıldığında son 50 mesaj gösterilir, “Daha eski mesajlar” ile geriye gidilir; açık konuşma 10 saniyede bir yenilenir. En yeni mesaj görüntülenince okundu konumu ilerler. Enter gönderir, Shift+Enter yeni satır açar. Gönderim başarısız olursa taslak korunur; tekrar denendiğinde aynı istek anahtarı kullanıldığından mesaj iki kez kaydedilmez.
+5. Her mesajın altındaki **Yanıtla / n yanıt** tek seviyeli yanıt dizisini açar.
+6. **Konuşma bilgisi** bölümünde konu, üyeler, üye ekleme/çıkarma (kanalda ADMIN/MANAGER, grupta sahip), ayrılma ve arşivleme bulunur. Yazma yetkisi yoksa nedeni (arşiv, yalnız yöneticiler, salt okunur) yazma alanının yerine gösterilir.
+7. Firma, fırsat ve proje sayfalarında kapalı gelen **Konuşma** bölümü açıldığında kayıt konuşması ilk kez oluşturulur ve kullanıcı onu takip etmeye başlar; sayfayı yalnız görüntülemek takip başlatmaz. Bölüm “Mesajlar’da aç” bağlantısı içerir.
+8. Mobilde (≤760 px) liste ve konuşma tek sütundur; konuşma açıkken liste gizlenir, “← Konuşmalar” ile geri dönülür, yazma alanı ekranın altında kalır.
+
+### Güvenlik ve sınırlar
+
+- Mesaj metni düz metin olarak çizilir; HTML yorumlanmaz. Yalnız `http(s)` adresleri bağlantıya çevrilir ve `target="_blank" rel="noopener noreferrer"` ile açılır. Plandaki küçük biçimlendirme alt kümesi (kalın, liste, kod) ve CRM kayıt bağlantısı önizlemesi uygulanmadı.
+- Ekrandaki düğmeler yalnız kolaylıktır; her işlem API'de F8-02 kurallarıyla yeniden denetlenir.
+- Canlı akış yoktur; yeni mesajlar en geç 10 saniye (açık konuşma) veya 15 saniye (liste ve menü sayacı) içinde görünür. Bildirim üretilmez.
+
+### Doğrulama (30 Ekim 2026)
+
+- Lint, TypeScript, birim/smoke testleri ve üretim derlemesi geçti; 52 PostgreSQL entegrasyon kontrolü değişmeden geçti.
+- 4 Playwright senaryosu geçti. Yeni senaryo gerçek davet bağlantısıyla ikinci bir kullanıcı oluşturur ve tarayıcıda şunları doğrular: kanala katılma ve Enter ile gönderme, kişi seçiciyle birebir başlatma, bağlantının `noopener noreferrer` ile çizilmesi, karşı tarafın menüde okunmamış sayısını görmesi ve konuşmayı açınca sayacın kalkması, yanıt dizisi ve diğer tarafta yoklamayla “1 yanıt” görünmesi, firma sayfasında kayıt konuşması, erişimi olmayan kullanıcının doğrudan adresle konuşmayı görememesi, 390 px'te liste/konuşma geçişi ve yatay taşma olmaması.
+- Ortam notu F8-02 ile aynı: Playwright tarayıcısı bu konteynerde yalnız yerel `PLAYWRIGHT_BROWSERS_PATH` bağlantısıyla çalıştırıldı; repoda değişiklik yok.
 
 ## Kabul kriterleri
 

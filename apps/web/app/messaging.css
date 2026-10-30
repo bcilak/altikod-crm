@@ -1,0 +1,54 @@
+/* Phase 8: team messaging. Uses the playful theme tokens; loaded after playful.css. */
+.chat-layout{display:grid;grid-template-columns:minmax(260px,330px) minmax(0,1fr);gap:26px;align-items:start}
+.chat-list{border:2px solid var(--dp-color-outline);border-radius:var(--dp-radius-corner);background:var(--dp-color-panel);padding:16px;box-shadow:4px 4px 0 var(--dp-color-outline);display:grid;gap:14px}
+.chat-list h2{font-size:14px;letter-spacing:.06em;text-transform:uppercase;margin:6px 0}
+.chat-list ul{display:grid;gap:4px}
+.chat-link{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:2px solid transparent;border-radius:12px;font-size:15px;font-weight:600;min-height:44px}
+.chat-link:hover{background:var(--dp-color-field-soft)}
+.chat-link[aria-current]{background:var(--dp-color-selection);border-color:var(--dp-color-outline)}
+.chat-name{min-width:0;overflow-wrap:anywhere}
+.chat-empty{font-size:13px}
+.new-conversation{display:grid;gap:10px;border-top:2px solid var(--dp-color-rule-muted);padding-top:14px}.new-conversation .editor{margin:0}
+.unread,.nav-count{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 7px;border-radius:999px;background:var(--dp-color-accent);color:#fff;font-size:12px;font-weight:800;flex-shrink:0}
+.nav-count{margin-left:8px}
+.sidebar nav a{display:flex;align-items:center}
+.chat-main{border:2px solid var(--dp-color-outline);border-radius:var(--dp-radius-corner);background:var(--dp-color-panel);padding:20px 22px;box-shadow:4px 4px 0 var(--dp-color-outline);min-width:0}
+.chat-main>.editor{margin:18px 0 0}
+.chat-placeholder{display:grid;place-items:center;min-height:240px}
+.chat-header{display:flex;align-items:flex-start;gap:14px;border-bottom:2px solid var(--dp-color-outline);padding-bottom:12px;margin-bottom:12px}
+.chat-header h2{margin:0;overflow-wrap:anywhere}.chat-header p{font-size:14px;overflow-wrap:anywhere}
+.chat-back{display:none!important}
+.message-stream{display:grid;gap:10px}
+.message-list{list-style:none;margin:0;padding:0 4px 0 0;max-height:min(60vh,640px);overflow-y:auto;display:grid;gap:2px}
+.record-conversation .message-list{max-height:420px}
+.thread-replies .message-list{max-height:none}
+.message{padding:10px 12px;border-radius:12px}
+.message.own{background:var(--dp-color-field-soft)}
+.message-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;font-size:14px}
+.message-meta time{color:var(--color-muted);font-size:13px}
+.message-body{white-space:pre-wrap;overflow-wrap:anywhere;margin:2px 0 0}
+.message-empty{padding:18px 0}
+.link-button{background:none;border:0;padding:4px 0;color:var(--dp-color-accent-strong);font-weight:700;font-size:13px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;min-height:32px}
+.replies{border-left:3px solid var(--dp-color-accent);margin:8px 0 4px 4px;padding-left:12px}
+.load-older{justify-self:center}
+.composer{display:grid;gap:8px;border-top:2px solid var(--dp-color-rule-muted);padding-top:12px}
+.composer textarea{resize:vertical;min-height:64px}
+.composer-actions{display:flex;justify-content:flex-end;align-items:center;gap:12px}
+.people-picker{border:2px solid var(--dp-color-rule-muted);border-radius:12px;padding:10px 12px;margin:0 0 12px;display:grid;gap:8px;min-width:0}
+.people-picker legend{font-size:14px;font-weight:700;padding:0 6px}
+.people-options{max-height:220px;overflow-y:auto;display:grid;gap:2px}
+.check-option{display:flex;align-items:center;gap:10px;font-weight:500;min-height:40px;cursor:pointer}
+.check-option input{width:20px;height:20px;min-height:0;flex-shrink:0;padding:0;accent-color:var(--dp-color-accent)}
+.new-conversation form,.chat-main form{display:grid;gap:12px}
+.member-list{list-style:none;padding:0;margin:8px 0}
+.record-conversation-note{font-size:14px;margin-bottom:10px}
+@media(max-width:1000px){.chat-layout{grid-template-columns:minmax(220px,280px) minmax(0,1fr);gap:18px}}
+@media(max-width:760px){
+  .chat-layout{grid-template-columns:1fr}
+  .chat-layout.has-active .chat-list{display:none}
+  .chat-layout:not(.has-active) .chat-placeholder{display:none}
+  .chat-back{display:inline-flex!important}
+  .chat-main{padding:14px;box-shadow:3px 3px 0 var(--dp-color-outline)}
+  .message-list{max-height:none}
+  .composer{position:sticky;bottom:0;background:var(--dp-color-panel);padding-bottom:8px}
+}

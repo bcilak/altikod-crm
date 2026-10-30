@@ -1,6 +1,6 @@
 # IT SalesHub — Uygulama yol haritası
 
-Tarih: 30 Ekim 2026. Durum: Faz 0–4 ve Faz 6 uygulandı ve yerelde doğrulandı (`docs/phase-6.md`); Faz 7 ürün sahibi kararıyla kapsam dışı. Faz 8 (ekip içi mesajlaşma ve belge paylaşımı): kararlar varsayılanlarla kabul edildi, F8-02 API çekirdeği uygulandı; ekran ve dosya ekleri henüz yok — `docs/phase-8-team-messaging.md`. Faz 5 yazılımı uygulandı; SMTP adaptörü ve en az yetkili DB rolü eklendi. Gerçek pilot ve canlı geçiş kapıları açık. Güncel kayıt: `docs/phases-4-5.md`. Güncel teslimat kaydı `docs/phases-1-3.md`; Faz 0 tarihsel kaydı `docs/phase-0-status.md`. Kaynak plan korunmuştur. Faz 1–3 yetki ve akış varsayımları kodda uygulanmıştır; teklif ve canlıya çıkış kararları ilgili faz öncesi kesinleştirilir.
+Tarih: 30 Ekim 2026. Durum: Faz 0–4 ve Faz 6 uygulandı ve yerelde doğrulandı (`docs/phase-6.md`); Faz 7 ürün sahibi kararıyla kapsam dışı. Faz 8 (ekip içi mesajlaşma ve belge paylaşımı): kararlar varsayılanlarla kabul edildi, F8-02 API çekirdeği ve F8-03 ekranları (yoklamayla güncellenen ilk sürüm) uygulandı; dosya ekleri, canlı akış ve bildirim henüz yok — `docs/phase-8-team-messaging.md`. Faz 5 yazılımı uygulandı; SMTP adaptörü ve en az yetkili DB rolü eklendi. Gerçek pilot ve canlı geçiş kapıları açık. Güncel kayıt: `docs/phases-4-5.md`. Güncel teslimat kaydı `docs/phases-1-3.md`; Faz 0 tarihsel kaydı `docs/phase-0-status.md`. Kaynak plan korunmuştur. Faz 1–3 yetki ve akış varsayımları kodda uygulanmıştır; teklif ve canlıya çıkış kararları ilgili faz öncesi kesinleştirilir.
 
 ## MVP sınırı
 
@@ -22,7 +22,7 @@ MVP dışı: akademi, kapsamlı bilgi yayın sistemi ve proje yönetimi, e-posta
 | 5 | Dashboard, CSV import/export, devir özeti/görev, pilot, canlı hazırlığı | 4 | Gerçek pilot, izin/E2E testleri ve DB+dosya geri yükleme tatbikatı tamamlanır |
 | 6 | Bilgi bankası, akademi, proje teslimatı | 5 | Onaylı içerik ve eğitim ilerlemesi; tek fırsata tek proje |
 | 7 | İhtiyaca göre entegrasyonlar, ardından AI — **kapsam dışı (ürün sahibi kararı)** | 6 | — |
-| 8 | Ekip içi mesajlaşma: kanal, grup, birebir, kayıt konuşması, dosya paylaşımı — **F8-02 uygulandı, F8-03…07 açık** | 6 | Kayıt kapsamı mesaj/dosya/arama/canlı akışta korunur; dosya taraması; pilot ekip WhatsApp yerine kullanır |
+| 8 | Ekip içi mesajlaşma: kanal, grup, birebir, kayıt konuşması, dosya paylaşımı — **F8-02 ve F8-03 uygulandı, F8-04…07 açık** | 6 | Kayıt kapsamı mesaj/dosya/arama/canlı akışta korunur; dosya taraması; pilot ekip WhatsApp yerine kullanır |
 
 Süre tahmini, Faz 0 doğrulaması ve ekip kapasitesi görüldükten sonra yapılacak. Her iş küçük, gözden geçirilebilir bir teslimat olmalı.
 
@@ -46,7 +46,8 @@ Süre tahmini, Faz 0 doğrulaması ve ekip kapasitesi görüldükten sonra yapı
 - F7: Ürün sahibi kararıyla yapılmayacak.
 - F8-01: Mesajlaşma kararları — ürün sahibi önerilen varsayılanları kabul etti (yönetici erişimi ve saklama için hukuki görüş ayrıca alınmalı).
 - F8-02: Konuşma/üyelik/mesaj şeması ve migration, izinler, kayıt kapsamı, idempotent gönderim, okundu, OpenAPI — uygulandı ve entegrasyon testleriyle doğrulandı; `docs/phase-8-team-messaging.md`.
-- F8-03…F8-07: Ekran, dosya ekleri ve antivirüs, canlı akış/bildirim, arama ve düzenleme/saklama, E2E ve pilot — açık.
+- F8-03: Mesajlar sayfası, menüde okunmamış sayacı, firma/fırsat/proje sayfalarında “Konuşma” bölümü, 10/15 sn yoklama — uygulandı; entegrasyon ve Playwright testleriyle doğrulandı.
+- F8-04…F8-07: Dosya ekleri ve antivirüs, canlı akış/bildirim, arama ve düzenleme/saklama, pilot — açık.
 
 ## Faz başlamadan kesinleştirilecek iş kararları
 

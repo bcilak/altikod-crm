@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import './fonts.css';
 import './playful.css';
+import './messaging.css';
 import Providers from '../components/providers';
 
 export const metadata: Metadata = { title: 'Altıkod CRM', description: 'Altıkod Digital Solutions iç satış ve müşteri yönetimi sistemi' };

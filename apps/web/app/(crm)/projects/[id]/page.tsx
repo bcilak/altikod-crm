@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import { api, formatDate, money, taskLabels } from '../../../../lib/api';
 import { projectStatusLabels, projectTransitions, type Project } from '../../../../lib/delivery';
 import { Action, Badge, Editor, Empty, FieldsForm, Loading, Notice, Panel, Title, options, useData } from '../../../../components/ui';
+import { RecordConversation } from '../../../../components/record-conversation';
 import { personChoice } from '../../../../components/crm-fields';
 const nextLabel: Record<string, string> = { IN_PROGRESS: 'Başlat / sürdür', ON_HOLD: 'Beklemeye al', COMPLETED: 'Tamamlandı olarak işaretle', CANCELLED: 'İptal et' };
 export default function ProjectDetail() {
@@ -17,6 +18,7 @@ export default function ProjectDetail() {
         {p.canWrite && <div className="quote-actions">{projectTransitions[p.status].map(s => <Action key={s} run={() => move(s)} confirm={s === 'CANCELLED' ? 'Proje iptal edilecek. İptal edilen proje yeniden açılamaz. Devam edilsin mi?' : undefined}>{p.status === 'COMPLETED' && s === 'IN_PROGRESS' ? 'Yeniden aç' : nextLabel[s]}</Action>)}</div>}
         {p.status === 'IN_PROGRESS' && p.canWrite && <p className="muted mt-3">Tamamlamak için tüm kilometre taşları ve proje görevleri kapatılmış olmalı.</p>}</Panel>
       {p.commercial && <Panel title="Satış bilgisi"><p><Link className="text-link" href={`/opportunities/${p.commercial.opportunity.id}`}>{p.commercial.opportunity.title}</Link></p>{p.commercial.quote ? <p className="notice">Kabul edilen teklif: {p.commercial.quote.number} V{p.commercial.quote.version} · {money(p.commercial.quote.total, p.commercial.quote.currency)}</p> : <p>Manuel kazanım gerekçesi: {p.commercial.manualWinReason ?? '—'}</p>}{p.commercial.contractUrl && <a className="btn" href={p.commercial.contractUrl} target="_blank" rel="noopener noreferrer">Sözleşme bağlantısı</a>}</Panel>}
+      <RecordConversation recordType="PROJECT" recordId={id} />
       <Panel title="Kilometre taşları">{p.milestones.length === 0 && <Empty>Henüz kilometre taşı yok.{p.canWrite && open ? ' Aşağıdan ilkini ekleyin.' : ''}</Empty>}
         {p.milestones.map(m => <div className="record" key={m.id}><div><strong>{m.completedAt ? '✓ ' : ''}{m.title}</strong><small className="muted block">Hedef {formatDate(m.dueAt)}{m.completedAt ? ` · Tamamlandı ${formatDate(m.completedAt)}` : ''}</small></div>{p.canWrite && open && <Action run={() => api(`/project-milestones/${m.id}`, 'PATCH', { completed: !m.completedAt })}>{m.completedAt ? 'Geri al' : 'Tamamlandı'}</Action>}</div>)}
         {p.canWrite && open && <Editor title="Kilometre taşı ekle"><FieldsForm fields={[{ name: 'title', label: 'Kilometre taşı', required: true }, { name: 'dueAt', label: 'Hedef tarih (İstanbul)', type: 'datetime-local', required: true }]} onSave={b => api(`/projects/${id}/milestones`, 'POST', b)} /></Editor>}</Panel>

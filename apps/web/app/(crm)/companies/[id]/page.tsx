@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { api, formatDate, type Company, type Page, type Person, type Opportunity } from '../../../../lib/api';
 import { Action, Badge, Editor, Empty, FieldsForm, Loading, Notice, Panel, Title, useData, useMe, options } from '../../../../components/ui';
+import { RecordConversation } from '../../../../components/record-conversation';
 import { activityFields, companyFields, contactFields, meetingFields, opportunityChoice, opportunityFields, personChoice, taskFields } from '../../../../components/crm-fields';
 type Timeline = { items: { id: string; type: string; title: string; at: string; detail: string }[] };
 export default function CompanyDetail() {
@@ -18,6 +19,7 @@ export default function CompanyDetail() {
     <div className="detail-grid"><div><Panel title="Firma bilgileri"><dl className="facts"><dt>Alan adı</dt><dd>{company.domain ?? '—'}</dd><dt>Telefon</dt><dd>{company.phone ?? '—'}</dd><dt>Adres</dt><dd>{company.address ?? '—'}</dd><dt>Etiketler</dt><dd>{company.tags.join(', ') || '—'}</dd></dl><p className="prewrap">{company.notes}</p></Panel>
       <Panel title="Kişiler">{!company.contacts?.length && <Empty>Henüz kişi eklenmedi.</Empty>}{company.contacts?.map(contact => <div className="record-block" key={contact.id}><strong>{contact.firstName} {contact.lastName}</strong>{contact.decisionMaker && <Badge>Karar verici</Badge>}<p>{contact.title} · {contact.email} · {contact.phone}</p>{write && <Editor title="Kişiyi düzenle"><FieldsForm fields={contactFields} initial={{ ...contact }} onSave={b => api(`/companies/${id}/contacts/${contact.id}`, 'PATCH', b)} /><Action confirm="Kişi arşivlensin mi?" run={() => api(`/companies/${id}/contacts/${contact.id}`, 'PATCH', { archived: true })}>Arşivle</Action></Editor>}</div>)}</Panel>
       <Panel title="Fırsatlar">{!opportunities?.items.length && <Empty />}{opportunities?.items.map(o => <p key={o.id}><Link className="text-link" href={`/opportunities/${o.id}`}>{o.title}</Link></p>)}</Panel>
+      <RecordConversation recordType="COMPANY" recordId={id} />
       <Panel title="Zaman çizelgesi"><div className="timeline">{timeline?.items.map(t => <article key={`${t.type}-${t.id}`}><small>{formatDate(t.at)} · {t.type}</small><p className="prewrap">{t.title}</p><span className="muted">{t.detail}</span></article>)}{timeline?.items.length === 0 && <Empty>İlk faaliyeti kaydedin.</Empty>}</div></Panel>
     </div><div>{write && <>
       <Editor title="Firma bilgilerini düzenle"><FieldsForm fields={companyFields} initial={{ ...company }} onSave={b => api(`/companies/${id}`, 'PATCH', b)} /></Editor>

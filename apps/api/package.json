@@ -1,0 +1,45 @@
+{
+  "name": "@saleshub/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test dist/test/*.test.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@nestjs/common": "12.3.2",
+    "@nestjs/core": "12.3.2",
+    "@nestjs/platform-express": "12.3.2",
+    "@nestjs/swagger": "12.0.5",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "@saleshub/shared": "0.1.0",
+    "argon2": "^0.45.1",
+    "csv-parse": "^7.0.3",
+    "csv-stringify": "^6.9.0",
+    "decimal.js": "^10.6.0",
+    "dotenv": "^17.2.3",
+    "nodemailer": "^10.3.1",
+    "playwright": "^1.64.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "12.3.2",
+    "@types/express": "^5.0.5",
+    "@types/node": "^24.10.0",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "@types/smtp-server": "^3.5.13",
+    "@types/supertest": "^6.0.3",
+    "pg": "^8.23.1",
+    "prisma": "7.10.1",
+    "smtp-server": "^3.21.3",
+    "supertest": "^7.1.4"
+  }
+}

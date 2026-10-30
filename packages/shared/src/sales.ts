@@ -1,0 +1,17 @@
+import { z } from 'zod';
+import { dateTime, uuid } from './crm';
+export const amount = z.string().regex(/^(0|[1-9]\d{0,11})(\.\d{1,4})?$/);
+export const percent = z.string().regex(/^(100(\.0{1,4})?|\d{1,2}(\.\d{1,4})?)$/);
+export const currency = z.enum(['TRY', 'USD', 'EUR', 'GBP']);
+export const productSchema = z.object({ sku: z.string().trim().min(1).max(80), name: z.string().trim().min(1).max(200), category: z.string().trim().min(1).max(100), brand: z.string().max(100).nullable().optional(), description: z.string().max(5000), salesPitch: z.string().max(2000).nullable().optional(), status: z.enum(['DRAFT', 'APPROVED', 'RETIRED']).default('DRAFT'), listPrice: amount, currency, cost: amount.nullable().optional() }).strict();
+export const productPatchSchema = productSchema.partial().extend({ status: productSchema.shape.status.removeDefault().optional() }).strict();
+export const quoteLineSchema = z.object({ productId: uuid.nullable().optional(), description: z.string().trim().min(1).max(2000), quantity: amount.refine(v => !/^0(\.0+)?$/.test(v)), unitPrice: amount, discountPct: percent.default('0'), taxPct: percent.default('20'), unitCost: amount.nullable().optional() }).strict();
+export const quoteContentSchema = z.object({ title: z.string().trim().min(1).max(200), currency, validUntil: dateTime, terms: z.string().max(10000).default(''), discountPct: percent.default('0'), items: z.array(quoteLineSchema).min(1).max(100) }).strict();
+export const quoteCreateSchema = quoteContentSchema.extend({ opportunityId: uuid }).strict();
+export const quoteEditSchema = quoteContentSchema.extend({ lockVersion: z.number().int().positive() }).strict();
+export const quoteActionSchema = z.object({ lockVersion: z.number().int().positive(), note: z.string().trim().min(1).max(2000).optional() }).strict();
+export const quoteRevisionSchema = z.object({ sourceVersionId: uuid, expectedCurrentVersion: z.number().int().positive() }).strict();
+export const settingsSchema = z.object({ sellerName: z.string().trim().min(1).max(200), sellerAddress: z.string().max(1000), sellerEmail: z.string().email().or(z.literal('')), defaultTerms: z.string().max(10000), autoApproval: z.boolean(), maxDiscountPct: percent, minMarginPct: percent, revision: z.number().int().positive() }).strict();
+export const reportSchema = z.object({ from: dateTime.optional(), to: dateTime.optional(), ownerId: uuid.optional(), sector: z.string().max(100).optional(), product: z.string().max(200).optional() }).strict().refine(v => !v.from || !v.to || new Date(v.from) <= new Date(v.to), 'Invalid date range');
+export const handoffSchema = z.object({ ownerId: uuid, summary: z.string().trim().min(1).max(5000), dueAt: dateTime, contractUrl: z.string().url().max(1000).refine(v => v.startsWith('https://')).nullable().optional() }).strict();
+export const csvSchema = z.object({ csv: z.string().min(1).max(500000) }).strict();

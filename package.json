@@ -1,0 +1,39 @@
+{
+  "name": "it-saleshub",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.12.0 <25"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "backup:create": "node --env-file-if-exists=.env scripts/backup.mjs create",
+    "backup:verify": "node --env-file-if-exists=.env scripts/backup.mjs verify",
+    "backup:recover": "node --env-file-if-exists=.env scripts/backup.mjs recover",
+    "backup:drill": "node --env-file-if-exists=.env scripts/backup-drill.mjs",
+    "admin:create": "npm run build -w @saleshub/shared && npm run build -w @saleshub/api && node scripts/admin.mjs",
+    "seed:demo": "npm run build -w @saleshub/shared && npm run build -w @saleshub/api && node --env-file=.env apps/api/dist/src/seed-demo.js",
+    "dev": "npm run build -w @saleshub/shared && npm run build -w @saleshub/api && concurrently -k -n web,api,types \"npm run dev -w @saleshub/web\" \"node --env-file=.env --watch apps/api/dist/src/main.js\" \"npm run watch -w @saleshub/api\"",
+    "build": "npm run build -w @saleshub/shared && npm run build -w @saleshub/api && npm run build -w @saleshub/web",
+    "typecheck": "npm run build -w @saleshub/shared && npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "test": "npm run build -w @saleshub/shared && npm run test -w @saleshub/api",
+    "test:integration": "npm run build -w @saleshub/shared && npm run build -w @saleshub/api && node --env-file-if-exists=.env scripts/integration.mjs",
+    "test:e2e": "npm run build -w @saleshub/shared && npm run build -w @saleshub/api && node --env-file-if-exists=.env scripts/integration.mjs --browser",
+    "db:generate": "npm run db:generate -w @saleshub/api",
+    "db:migrate": "npm run db:migrate -w @saleshub/api",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@playwright/test": "^1.64.1",
+    "concurrently": "^9.2.1",
+    "eslint": "^10.13.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1"
+  }
+}

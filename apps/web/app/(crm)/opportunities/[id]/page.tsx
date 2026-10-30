@@ -1,0 +1,12 @@
+'use client';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { api, formatDate, money, stageLabels, type Opportunity, type Person } from '../../../../lib/api';
+import { Editor, FieldsForm, Loading, Notice, Panel, Title, useData } from '../../../../components/ui';
+import { opportunityFields, personChoice } from '../../../../components/crm-fields';
+import Transition from '../../../../components/transition';
+export default function OpportunityDetail() {
+  const { id } = useParams<{ id: string }>(); const { data: row, error, isLoading } = useData<Opportunity>(`/opportunities/${id}`); const { data: people } = useData<Person[]>('/companies/directory');
+  if (isLoading) return <Loading />; if (!row) return <Notice error={error} />;
+  return <><Link className="text-link" href="/opportunities">← Fırsatlar</Link><Title title={row.title} subtitle={`${stageLabels[row.stage]} · ${money(row.estimatedValue, row.currency)}`} /><div className="detail-grid"><div><Panel title="Fırsat bilgileri"><p><Link className="text-link" href={`/companies/${row.companyId}`}>{row.company?.displayName}</Link></p><dl className="facts"><dt>Sorumlu</dt><dd>{row.owner?.name}</dd><dt>Sonraki aksiyon</dt><dd>{formatDate(row.nextActionAt)}</dd><dt>Olasılık</dt><dd>%{row.probability}</dd><dt>Tahmini kapanış</dt><dd>{formatDate(row.expectedCloseAt)}</dd></dl>{row.lostReason && <p>Kayıp: {row.lostReason}</p>}{row.wonReason && <p>Kazanım: {row.wonReason}</p>}</Panel><p className="quote-actions"><Link className="btn" href="/quotes">Tekliflere git</Link>{row.stage === 'WON' && <Link className="btn" href="/handoffs">İşi devret</Link>}</p><Panel title="Aşama geçmişi"><div className="timeline">{row.history?.map(h => <article key={h.id}><small>{formatDate(h.changedAt)}</small><p>{h.fromStage ? stageLabels[h.fromStage] : 'Oluşturuldu'} → {stageLabels[h.toStage]}</p>{h.note && <p className="prewrap">{h.note}</p>}</article>)}</div></Panel></div><div>{row.canWrite && <><Editor title="Aşamayı değiştir" open><Transition opportunity={row} /></Editor>{!['WON', 'LOST'].includes(row.stage) && <Editor title="Fırsatı düzenle"><FieldsForm key={row.version} fields={[...opportunityFields, personChoice((people ?? []).filter(p => p.role !== 'TECHNICAL'), 'ownerId')]} initial={{ ...row }} onSave={b => api(`/opportunities/${id}`, 'PATCH', { ...b, version: row.version })} /></Editor>}</>}</div></div></>;
+}

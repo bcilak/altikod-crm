@@ -1,0 +1,617 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model SystemMetadata {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("system_metadata")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  SALES
+  TECHNICAL
+  VIEWER
+}
+enum Stage {
+  NEW_LEAD
+  QUALIFICATION
+  NEEDS_ANALYSIS
+  SOLUTION_DESIGN
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  name         String
+  passwordHash String?
+  role         Role     @default(SALES)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+  sessions     Session[]
+  tokens       AuthToken[]
+  companies    Company[]
+  access       CompanyAccess[]
+  opportunities Opportunity[]
+  tasks        Task[]
+  notifications Notification[]
+  ownedProjects Project[] @relation("ProjectOwner")
+  knowledgeArticles KnowledgeArticle[] @relation("KnowledgeOwner")
+  lessonProgress LessonProgress[]
+}
+model RolePermission {
+  role     Role
+  resource String
+  action   String
+  @@id([role, resource, action])
+}
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  tokenHash String   @unique
+  csrfToken String
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @db.Timestamptz(6)
+  revokedAt DateTime? @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  @@index([userId, revokedAt])
+}
+model AuthToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  tokenHash String   @unique
+  kind      String
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @db.Timestamptz(6)
+  usedAt    DateTime? @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+model RateLimit {
+  key       String @id
+  count     Int    @default(1)
+  expiresAt DateTime @db.Timestamptz(6)
+}
+model AuditLog {
+  id        String @id @default(uuid()) @db.Uuid
+  actorId   String? @db.Uuid
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json @default("{}")
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  @@index([createdAt])
+}
+model Company {
+  id           String @id @default(uuid()) @db.Uuid
+  displayName  String
+  legalName    String
+  domain       String?
+  sector       String?
+  website      String?
+  phone        String?
+  address      String?
+  type         String @default("CUSTOMER")
+  source       String?
+  status       String @default("ACTIVE")
+  tags         String[] @default([])
+  notes        String?
+  ownerId      String @db.Uuid
+  owner        User @relation(fields: [ownerId], references: [id])
+  archivedAt   DateTime? @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+  access       CompanyAccess[]
+  contacts     Contact[]
+  activities   Activity[]
+  opportunities Opportunity[]
+  tasks        Task[]
+  meetings     Meeting[]
+  quotes       Quote[]
+  handoffs     Handoff[]
+  projects     Project[]
+  @@index([ownerId, status])
+  @@index([domain])
+}
+model CompanyAccess {
+  companyId String @db.Uuid
+  userId    String @db.Uuid
+  permission String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([companyId, userId])
+}
+model Contact {
+  id          String @id @default(uuid()) @db.Uuid
+  companyId   String @db.Uuid
+  company     Company @relation(fields: [companyId], references: [id])
+  firstName   String
+  lastName    String
+  title       String?
+  email       String?
+  phone       String?
+  decisionMaker Boolean @default(false)
+  preferences String?
+  archivedAt  DateTime? @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+  activities  Activity[]
+  attendees   MeetingAttendee[]
+  @@index([companyId])
+}
+model Opportunity {
+  id          String @id @default(uuid()) @db.Uuid
+  companyId   String @db.Uuid
+  company     Company @relation(fields: [companyId], references: [id])
+  ownerId     String @db.Uuid
+  owner       User @relation(fields: [ownerId], references: [id])
+  title       String
+  stage       Stage @default(NEW_LEAD)
+  estimatedValue Decimal @db.Decimal(18,4)
+  currency    String @db.Char(3)
+  probability Int @default(0)
+  expectedCloseAt DateTime? @db.Timestamptz(6)
+  nextActionAt DateTime @db.Timestamptz(6)
+  source      String?
+  competitor  String?
+  products    String[] @default([])
+  lostReason  String?
+  wonReason   String?
+  wonAt       DateTime? @db.Timestamptz(6)
+  lostAt      DateTime? @db.Timestamptz(6)
+  version     Int @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+  history     StageHistory[]
+  activities  Activity[]
+  tasks       Task[]
+  meetings    Meeting[]
+  quotes      Quote[]
+  handoff     Handoff?
+  project     Project?
+  acceptedQuoteVersionId String? @unique @db.Uuid
+  @@index([ownerId, stage, expectedCloseAt])
+  @@index([companyId])
+}
+model StageHistory {
+  id            String @id @default(uuid()) @db.Uuid
+  opportunityId String @db.Uuid
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id])
+  fromStage     Stage?
+  toStage       Stage
+  changedBy     String @db.Uuid
+  note          String?
+  changedAt     DateTime @default(now()) @db.Timestamptz(6)
+  @@index([opportunityId, changedAt])
+}
+model Activity {
+  id           String @id @default(uuid()) @db.Uuid
+  companyId    String @db.Uuid
+  company      Company @relation(fields: [companyId], references: [id])
+  opportunityId String? @db.Uuid
+  opportunity  Opportunity? @relation(fields: [opportunityId], references: [id])
+  contactId    String? @db.Uuid
+  contact      Contact? @relation(fields: [contactId], references: [id])
+  type         String
+  source       String @default("MANUAL")
+  summary      String
+  outcome      String?
+  happenedAt   DateTime @db.Timestamptz(6)
+  createdBy    String @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+  @@index([companyId, happenedAt(sort: Desc)])
+}
+model Task {
+  id           String @id @default(uuid()) @db.Uuid
+  companyId    String @db.Uuid
+  company      Company @relation(fields: [companyId], references: [id])
+  opportunityId String? @db.Uuid
+  opportunity  Opportunity? @relation(fields: [opportunityId], references: [id])
+  assigneeId   String @db.Uuid
+  assignee     User @relation(fields: [assigneeId], references: [id])
+  title        String
+  description  String?
+  dueAt        DateTime @db.Timestamptz(6)
+  reminderAt   DateTime? @db.Timestamptz(6)
+  priority     String @default("NORMAL")
+  status       TaskStatus @default(OPEN)
+  completedAt  DateTime? @db.Timestamptz(6)
+  version      Int @default(1)
+  createdBy    String @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+  projectId    String? @db.Uuid
+  project      Project? @relation(fields: [projectId], references: [id])
+  @@index([assigneeId, status, dueAt])
+  @@index([projectId])
+  @@index([companyId])
+}
+model Meeting {
+  id           String @id @default(uuid()) @db.Uuid
+  companyId    String @db.Uuid
+  company      Company @relation(fields: [companyId], references: [id])
+  opportunityId String? @db.Uuid
+  opportunity  Opportunity? @relation(fields: [opportunityId], references: [id])
+  title        String
+  startsAt     DateTime @db.Timestamptz(6)
+  endsAt       DateTime @db.Timestamptz(6)
+  timezone     String @default("Europe/Istanbul")
+  agenda       String?
+  notes        String?
+  outcome      String?
+  location     String?
+  createdBy    String @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+  attendees    MeetingAttendee[]
+  @@index([companyId, startsAt])
+}
+model MeetingAttendee {
+  id           String @id @default(uuid()) @db.Uuid
+  meetingId    String @db.Uuid
+  meeting      Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  userId       String? @db.Uuid
+  contactId    String? @db.Uuid
+  contact      Contact? @relation(fields: [contactId], references: [id])
+  externalEmail String?
+}
+model Notification {
+  id           String @id @default(uuid()) @db.Uuid
+  userId       String @db.Uuid
+  user         User @relation(fields: [userId], references: [id])
+  taskId       String? @db.Uuid
+  quoteVersionId String? @db.Uuid
+  type         String
+  dedupeKey    String @unique
+  readAt       DateTime? @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  @@index([userId, readAt])
+}
+
+enum QuoteStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  WITHDRAWN
+}
+model SalesSettings {
+  id String @id @default("default")
+  sellerName String @default("IT SalesHub")
+  sellerAddress String @default("")
+  sellerEmail String @default("")
+  defaultTerms String @default("")
+  autoApproval Boolean @default(false)
+  maxDiscountPct Decimal @default(0) @db.Decimal(7,4)
+  minMarginPct Decimal @default(0) @db.Decimal(7,4)
+  revision Int @default(1)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+}
+model Product {
+  id String @id @default(uuid()) @db.Uuid
+  sku String @unique
+  name String
+  category String
+  brand String?
+  description String
+  salesPitch String?
+  status String @default("DRAFT")
+  listPrice Decimal @db.Decimal(18,4)
+  currency String @db.Char(3)
+  cost Decimal? @db.Decimal(18,4)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  items QuoteItem[]
+  articles KnowledgeArticle[]
+  courses Course[]
+}
+model Quote {
+  id String @id @default(uuid()) @db.Uuid
+  number Int @unique @default(autoincrement())
+  companyId String @db.Uuid
+  company Company @relation(fields: [companyId], references: [id])
+  opportunityId String @db.Uuid
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id])
+  currentVersion Int @default(1)
+  createdBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  versions QuoteVersion[]
+  @@index([companyId, createdAt])
+}
+model QuoteVersion {
+  id String @id @default(uuid()) @db.Uuid
+  quoteId String @db.Uuid
+  quote Quote @relation(fields: [quoteId], references: [id])
+  versionNumber Int
+  lockVersion Int @default(1)
+  status QuoteStatus @default(DRAFT)
+  currency String @db.Char(3)
+  validUntil DateTime @db.Timestamptz(6)
+  terms String
+  title String
+  discountPct Decimal @db.Decimal(7,4)
+  subtotal Decimal @db.Decimal(18,4)
+  discountTotal Decimal @db.Decimal(18,4)
+  taxTotal Decimal @db.Decimal(18,4)
+  total Decimal @db.Decimal(18,4)
+  costTotal Decimal? @db.Decimal(18,4)
+  marginPct Decimal? @db.Decimal(18,4)
+  snapshot Json
+  policySnapshot Json?
+  approvalMethod String?
+  approvedBy String? @db.Uuid
+  approvedAt DateTime? @db.Timestamptz(6)
+  sentAt DateTime? @db.Timestamptz(6)
+  acceptedAt DateTime? @db.Timestamptz(6)
+  acceptanceNote String?
+  pdfKey String?
+  pdfChecksum String?
+  createdBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  items QuoteItem[]
+  events QuoteEvent[]
+  @@unique([quoteId, versionNumber])
+  @@index([status, validUntil])
+}
+model QuoteItem {
+  id String @id @default(uuid()) @db.Uuid
+  quoteVersionId String @db.Uuid
+  quoteVersion QuoteVersion @relation(fields: [quoteVersionId], references: [id], onDelete: Cascade)
+  productId String? @db.Uuid
+  product Product? @relation(fields: [productId], references: [id])
+  description String
+  quantity Decimal @db.Decimal(18,4)
+  unitPrice Decimal @db.Decimal(18,4)
+  discountPct Decimal @db.Decimal(7,4)
+  taxPct Decimal @db.Decimal(7,4)
+  unitCost Decimal? @db.Decimal(18,4)
+  net Decimal @db.Decimal(18,4)
+  tax Decimal @db.Decimal(18,4)
+  total Decimal @db.Decimal(18,4)
+  position Int
+  @@unique([quoteVersionId, position])
+}
+model QuoteEvent {
+  id String @id @default(uuid()) @db.Uuid
+  quoteVersionId String @db.Uuid
+  quoteVersion QuoteVersion @relation(fields: [quoteVersionId], references: [id])
+  fromStatus QuoteStatus?
+  toStatus QuoteStatus
+  actorId String? @db.Uuid
+  note String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+model Handoff {
+  id String @id @default(uuid()) @db.Uuid
+  opportunityId String @unique @db.Uuid
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id])
+  companyId String @db.Uuid
+  company Company @relation(fields: [companyId], references: [id])
+  ownerId String @db.Uuid
+  acceptedQuoteVersionId String? @db.Uuid
+  taskId String @unique @db.Uuid
+  summary String
+  contractUrl String?
+  snapshot Json
+  requestHash String
+  createdBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  project Project?
+}
+model ImportBatch {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  rows Json
+  errors Json
+  resultIds String[] @default([])
+  expiresAt DateTime @db.Timestamptz(6)
+  completedAt DateTime? @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+model OutboxEvent {
+  id           String @id @default(uuid()) @db.Uuid
+  type         String
+  taskId       String @db.Uuid
+  taskVersion  Int
+  dedupeKey    String @unique
+  runAt        DateTime @db.Timestamptz(6)
+  status       String @default("PENDING")
+  attempts     Int @default(0)
+  completedAt  DateTime? @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  @@index([status, runAt])
+}
+
+// Phase 6: delivery projects, knowledge base, academy.
+enum ProjectStatus {
+  PLANNED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+model Project {
+  id String @id @default(uuid()) @db.Uuid
+  opportunityId String @unique @db.Uuid
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id])
+  companyId String @db.Uuid
+  company Company @relation(fields: [companyId], references: [id])
+  handoffId String @unique @db.Uuid
+  handoff Handoff @relation(fields: [handoffId], references: [id])
+  ownerId String @db.Uuid
+  owner User @relation("ProjectOwner", fields: [ownerId], references: [id])
+  title String
+  status ProjectStatus @default(PLANNED)
+  startAt DateTime? @db.Timestamptz(6)
+  dueAt DateTime @db.Timestamptz(6)
+  completedAt DateTime? @db.Timestamptz(6)
+  version Int @default(1)
+  createdBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  milestones ProjectMilestone[]
+  tasks Task[]
+  @@index([ownerId, status])
+  @@index([companyId])
+}
+model ProjectMilestone {
+  id String @id @default(uuid()) @db.Uuid
+  projectId String @db.Uuid
+  project Project @relation(fields: [projectId], references: [id])
+  title String
+  dueAt DateTime @db.Timestamptz(6)
+  completedAt DateTime? @db.Timestamptz(6)
+  position Int
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  @@index([projectId, position])
+}
+
+enum KnowledgeStatus {
+  DRAFT
+  IN_REVIEW
+  PUBLISHED
+  SUPERSEDED
+}
+model KnowledgeArticle {
+  id String @id @default(uuid()) @db.Uuid
+  title String
+  category String
+  tags String[] @default([])
+  productId String? @db.Uuid
+  product Product? @relation(fields: [productId], references: [id])
+  ownerId String @db.Uuid
+  owner User @relation("KnowledgeOwner", fields: [ownerId], references: [id])
+  publishedVersionId String? @unique @db.Uuid
+  retiredAt DateTime? @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  versions KnowledgeVersion[]
+  attachments KnowledgeAttachment[]
+  lessons Lesson[]
+  @@index([category])
+  @@index([productId])
+}
+model KnowledgeVersion {
+  id String @id @default(uuid()) @db.Uuid
+  articleId String @db.Uuid
+  article KnowledgeArticle @relation(fields: [articleId], references: [id])
+  version Int
+  status KnowledgeStatus @default(DRAFT)
+  lockVersion Int @default(1)
+  summary String
+  productVersion String?
+  technicalSpecs String @default("")
+  useCases String @default("")
+  idealCustomer String @default("")
+  salesPitch String @default("")
+  discoveryQuestions Json @default("[]")
+  objections Json @default("[]")
+  faq Json @default("[]")
+  limitations String @default("")
+  authorId String @db.Uuid
+  reviewerId String? @db.Uuid
+  reviewNote String?
+  submittedAt DateTime? @db.Timestamptz(6)
+  publishedAt DateTime? @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  @@unique([articleId, version])
+  @@index([status])
+}
+model KnowledgeAttachment {
+  id String @id @default(uuid()) @db.Uuid
+  articleId String @db.Uuid
+  article KnowledgeArticle @relation(fields: [articleId], references: [id])
+  name String
+  mimeType String
+  size Int
+  fileKey String
+  checksum String
+  uploadedBy String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  removedAt DateTime? @db.Timestamptz(6)
+  @@index([articleId])
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+model Course {
+  id String @id @default(uuid()) @db.Uuid
+  title String
+  description String @default("")
+  status CourseStatus @default(DRAFT)
+  productId String? @db.Uuid
+  product Product? @relation(fields: [productId], references: [id])
+  ownerId String @db.Uuid
+  version Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  lessons Lesson[]
+  @@index([status])
+}
+model Lesson {
+  id String @id @default(uuid()) @db.Uuid
+  courseId String @db.Uuid
+  course Course @relation(fields: [courseId], references: [id])
+  position Int
+  title String
+  body String
+  articleId String? @db.Uuid
+  article KnowledgeArticle? @relation(fields: [articleId], references: [id])
+  passPct Int @default(80)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  questions QuizQuestion[]
+  progress LessonProgress[]
+  @@index([courseId, position])
+}
+model QuizQuestion {
+  id String @id @default(uuid()) @db.Uuid
+  lessonId String @db.Uuid
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  position Int
+  prompt String
+  options String[]
+  correctIndex Int
+}
+model LessonProgress {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user User @relation(fields: [userId], references: [id])
+  lessonId String @db.Uuid
+  lesson Lesson @relation(fields: [lessonId], references: [id])
+  attempts Int @default(0)
+  bestScore Int?
+  completedAt DateTime? @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  @@unique([userId, lessonId])
+}

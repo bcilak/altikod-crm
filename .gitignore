@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+.next/
+.next-e2e/
+coverage/
+*.tsbuildinfo
+*.log
+apps/api/src/generated/
+.local-mail/
+.private-files/
+.backups/
+.tmp/
+test-results/
+playwright-report/

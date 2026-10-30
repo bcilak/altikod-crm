@@ -1,0 +1,42 @@
+name: Quality checks
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: saleshub
+          POSTGRES_PASSWORD: ci_only
+          POSTGRES_DB: saleshub
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U saleshub -d saleshub"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://saleshub:ci_only@localhost:5432/saleshub?schema=public
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run db:migrate
+      - run: npm run check
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:integration
+      - run: npm run test:e2e
+      - name: Database readiness smoke
+        run: |
+          node apps/api/dist/src/main.js &
+          API_PID=$!
+          trap 'kill "$API_PID"' EXIT
+          for attempt in $(seq 1 20); do
+            if curl --fail http://127.0.0.1:3001/api/v1/ready; then exit 0; fi
+            sleep 1
+          done
+          exit 1

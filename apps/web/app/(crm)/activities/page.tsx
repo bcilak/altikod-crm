@@ -1,0 +1,10 @@
+'use client';
+import Link from 'next/link';
+import { useState } from 'react';
+import { api, activityLabels, formatDate, type Activity, type Company, type Page } from '../../../lib/api';
+import { activityFields, companyChoice } from '../../../components/crm-fields';
+import { Badge, Editor, Empty, FieldsForm, Loading, Notice, Pager, Title, useData, useMe } from '../../../components/ui';
+export default function Activities() {
+  const [page, setPage] = useState(1); const [search, setSearch] = useState(''); const { data: me } = useMe(); const { data, error, isLoading } = useData<Page<Activity>>(`/activities?page=${page}&search=${encodeURIComponent(search)}`); const { data: companies } = useData<Page<Company>>('/companies?pageSize=100');
+  return <><Title title="Faaliyetler" subtitle="Gerçek görüşmeleri ve sonuçlarını müşterinin bağlamında kaydedin." />{me?.role !== 'VIEWER' && <Editor title="Faaliyet ekle"><FieldsForm fields={[companyChoice(companies?.items ?? []), ...activityFields]} onSave={b => api('/activities', 'POST', b)} /></Editor>}<div className="toolbar"><label>Özette ara<input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></label></div><Notice error={error} />{isLoading && <Loading />}{data?.items.length === 0 && <Empty />}{data?.items.map(a => <section className="panel" key={a.id}><div className="record"><Link className="text-link" href={`/companies/${a.companyId}`}>{a.company.displayName}</Link><Badge>{activityLabels[a.type]} · Manuel kayıt</Badge></div><small>{formatDate(a.happenedAt)}</small><p className="prewrap mt-3">{a.summary}</p><p className="muted prewrap">{a.outcome}</p>{me?.role !== 'VIEWER' && <Editor title="Faaliyeti düzelt"><FieldsForm fields={activityFields} initial={{ ...a }} onSave={b => api(`/activities/${a.id}`, 'PATCH', b)} /></Editor>}<Link className="text-link" href={`/companies/${a.companyId}`}>Firma içinde takip görevi oluştur →</Link></section>)}{data && <Pager page={page} total={data.total} setPage={setPage} />}</>;
+}

@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: saleshub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a strong database password}
+      POSTGRES_DB: saleshub
+    volumes: ["database:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saleshub -d saleshub"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  migrate:
+    build: { context: .. }
+    # Owner role applies migrations, then (re)grants the least-privileged runtime role used by the API.
+    command: ["sh", "-c", "npm run db:migrate && node scripts/db-grants.mjs"]
+    environment:
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:?Set owner database URL using postgres as hostname}
+      APP_DB_USER: ${APP_DB_USER:?Set runtime database user}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set runtime database password}
+    depends_on:
+      postgres: { condition: service_healthy }
+  api:
+    build: { context: .. }
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set runtime role URL (APP_DB_USER) using postgres as hostname}
+      APP_ORIGIN: https://${DOMAIN:?Set domain}
+      MAIL_TRANSPORT: smtp
+      SMTP_HOST: ${SMTP_HOST:?Set SMTP host}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:?Set sender, e.g. Altıkod CRM <crm@example.com>}
+      HOST: 0.0.0.0
+      PRIVATE_FILES_DIR: /app/.private-files
+    volumes: ["private-files:/app/.private-files"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/v1/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  web:
+    build: { context: .. }
+    command: ["node", "node_modules/next/dist/bin/next", "start", "apps/web", "--hostname", "0.0.0.0", "--port", "3000"]
+    environment:
+      NODE_ENV: production
+      API_INTERNAL_URL: http://api:3001
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set domain}
+    ports: ["80:80", "443:443"]
+    volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy-data:/data", "caddy-config:/config"]
+    depends_on: [web, api]
+volumes:
+  database:
+  private-files:
+  caddy-data:
+  caddy-config:

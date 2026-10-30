@@ -1,0 +1,14 @@
+'use client';
+import { useState } from 'react';
+import { api, formatDate, taskLabels, type Company, type Page, type Person, type Task } from '../../../lib/api';
+import { companyChoice, personChoice, taskFields } from '../../../components/crm-fields';
+import { Badge, Editor, Empty, FieldsForm, Loading, Notice, Pager, Title, useData, useMe, options } from '../../../components/ui';
+export default function Tasks() {
+  const { data: me } = useMe(); const [mine, setMine] = useState(true); const [overdue, setOverdue] = useState(false); const [status, setStatus] = useState(''); const [page, setPage] = useState(1);
+  const { data, error, isLoading } = useData<Page<Task>>(`/tasks?page=${page}&overdue=${overdue}${status ? `&status=${status}` : ''}${mine && me ? `&assigneeId=${me.id}` : ''}`, !!me);
+  const sales = me && ['ADMIN', 'MANAGER', 'SALES'].includes(me.role);
+  const { data: companies } = useData<Page<Company>>('/companies?pageSize=100', !!sales); const { data: people } = useData<Person[]>('/companies/directory', !!sales);
+  return <><Title title="Görevler" subtitle="Takiplerinizi planlayın, sorumluları ve gecikmeleri görün." />{sales && <Editor title="Yeni görev"><FieldsForm fields={[companyChoice(companies?.items ?? []), personChoice(people ?? []), ...taskFields]} initial={{ assigneeId: me?.id, priority: 'NORMAL' }} onSave={b => api('/tasks', 'POST', b)} /></Editor>}
+    <div className="toolbar"><label>Durum<select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">Tümü</option>{options(taskLabels).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label><label className="check-label"><input type="checkbox" checked={mine} onChange={e => { setMine(e.target.checked); setPage(1); }} />Görevlerim</label><label className="check-label"><input type="checkbox" checked={overdue} onChange={e => { setOverdue(e.target.checked); setPage(1); }} />Yalnız gecikenler</label></div><Notice error={error} />{isLoading && <Loading />}{data?.items.length === 0 && <Empty />}
+    {data?.items.map(task => <section className="panel" key={task.id}><div className="record"><div><h2>{task.title}</h2><p className="muted">{task.company.displayName} · {task.assignee.name}</p></div><Badge>{taskLabels[task.status]}</Badge></div><p className="prewrap">{task.description}</p><p>{formatDate(task.dueAt)} · {task.priority}</p>{me?.role !== 'VIEWER' && <Editor title="Görevi güncelle"><FieldsForm key={task.version} fields={[...(sales ? [...taskFields, personChoice(people ?? [])] : []), { name: 'status', label: 'Durum', type: 'select', required: true, options: options(taskLabels) }]} initial={{ ...task }} onSave={b => api(`/tasks/${task.id}`, 'PATCH', { ...b, version: task.version })} /></Editor>}</section>)}{data && <Pager page={page} total={data.total} setPage={setPage} />}</>;
+}

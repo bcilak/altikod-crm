@@ -1,0 +1,6 @@
+'use client';
+import Link from 'next/link';
+import { api, formatDate } from '../../../lib/api';
+import { Action, Empty, Loading, Notice, Title, useData } from '../../../components/ui';
+type Notification = { id: string; type: string; readAt?: string; createdAt: string; task?: { id: string; title: string; dueAt: string }; quote?: { id: string; quoteId: string; title: string } };
+export default function Notifications() { const { data, error, isLoading } = useData<Notification[]>('/notifications'); return <><Title title="Bildirimler" subtitle="Görev atamaları ve takip hatırlatmaları." /><Notice error={error} />{isLoading && <Loading />}{data?.length === 0 && <Empty />}{data?.map(n => <article className="panel record" key={n.id}><div><strong>{({ QUOTE_APPROVAL: 'Teklif onayı bekliyor', QUOTE_EXPIRING: 'Teklif geçerliliği yaklaşıyor', TASK_ASSIGNED: 'Görev atandı', TASK_REMINDER: 'Görev hatırlatması', TASK_OVERDUE: 'Görev hedef tarihi geldi' } as Record<string, string>)[n.type]}</strong><p><Link className="text-link" href={n.quote ? `/quotes/${n.quote.quoteId}` : `/tasks?task=${n.task?.id}`}>{n.quote?.title ?? n.task?.title}</Link></p><small>{formatDate(n.createdAt)}</small></div>{!n.readAt ? <Action run={() => api(`/notifications/${n.id}/read`, 'POST')}>Okundu işaretle</Action> : <span className="muted">Okundu</span>}</article>)}</>; }

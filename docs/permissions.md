@@ -15,6 +15,7 @@ Tüm işlemler: aktif kullanıcı + güncel rol izni + kayıt kapsamı + gerekli
 | Audit | Evet | Hayır | Hayır | Hayır | Hayır |
 | Proje (Faz 6) | Tümü | Tümü | Firma kapsamı; yazma paylaşım seviyesine göre | Sorumlusu olduğu veya görevi bulunan proje; yazma yalnız sorumlu; ticari alanlar kapalı | Firma kapsamı, salt okunur |
 | Bilgi bankası | Taslak/yayın/kaldırma | Taslak/yayın/kaldırma | Yalnız yayındaki kartlar ve dosyaları | Taslak yazar, incelemeye gönderir; yayınlayamaz | Yalnız yayındaki kartlar |
+| Mesajlaşma (Faz 8, planlandı) | Kanal yönetimi; özel/birebir içeriğe erişim yok | Kanal yönetimi; özel/birebir içeriğe erişim yok | Grup/birebir; kayıt konuşması kayıt kapsamına göre | Grup/birebir; yalnız erişebildiği proje konuşması | Öneri: kanal okuma + birebir |
 | Akademi | Eğitim yönetimi + ilerleme raporu | Eğitim yönetimi + ilerleme raporu | Yayındaki eğitimler, yalnız kendi ilerlemesi | Yayındaki eğitimler, kendi ilerlemesi | Yayındaki eğitimler, kendi ilerlemesi |
 
 Özel paylaşım okuma/yazma seviyesine sahiptir; paylaşma yetkisi ayrıca denetlenir. Firma sahibinin değişmesi ve paylaşım iptali bağlı kaynaklara da anında yansır. Maliyet izni genel teklif okuma izninden bağımsızdır; snapshot, audit ve dosyalarda da korunur.

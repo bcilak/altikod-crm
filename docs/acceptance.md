@@ -55,3 +55,12 @@ Bu liste test planıdır; uygulandı/geçti iddiası değildir. Çalıştırılm
 - Ek dosya türü içerikten doğrulanır; PDF/PNG/JPEG dışı, 5 MB üstü ve yol karakteri içeren adlar reddedilir.
 - Öğrenen eğitim yanıtlarında cevap anahtarını göremez; puan sunucuda hesaplanır; yalnız kendi ilerlemesi güncellenir; ilerleme raporu yalnız eğitim yöneticisine açıktır.
 
+
+## Faz 8 (planlandı, uygulanmadı)
+
+Ayrıntılı taslak: `docs/phase-8-team-messaging.md`.
+
+- Kayıt konuşmasının mesajları, dosyaları ve arama sonuçları kayıt kapsamı dışındaki kullanıcıya hiçbir uçtan (ID, liste, arama, SSE, bildirim, dosya adresi) görünmez; paylaşım iptali anında uygulanır.
+- Özel grup ve birebir konuşmalar üye olmayana, ADMIN dahil, görünmez.
+- Tekrarlanan gönderim tek mesaj ve tek bildirim üretir.
+- Dosya türü içerikten doğrulanır, makrolu Office dosyası reddedilir, taranmamış dosya indirilemez.

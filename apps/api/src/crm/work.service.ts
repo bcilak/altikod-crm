@@ -20,6 +20,8 @@ export async function scheduleTask(db: Db, task: { id: string; version: number; 
   ];
   for (const event of events) await db.outboxEvent.create({ data: { type: event.type, runAt: event.at, taskId: task.id, taskVersion: task.version, dedupeKey: `${task.id}:${task.version}:${event.type}` } });
 }
+export type MessageResolver = (messageIds: string[]) => Promise<Map<string, unknown>>;
+
 @Injectable()
 export class WorkService {
   constructor(private readonly prisma: PrismaService) {}
@@ -140,16 +142,23 @@ export class WorkService {
       return result;
     });
   }
-  async notifications(actor: Actor) {
+  /**
+   * Message notifications are resolved by the messaging module (passed in to keep module imports acyclic). Every kind is filtered
+   * by the reader's current access, so a notification about something they can no longer see simply disappears.
+   */
+  async notifications(actor: Actor, messages: MessageResolver) {
     const notifications = await this.prisma.notification.findMany({ where: { userId: actor.id }, orderBy: { createdAt: 'desc' }, take: 100 });
     const tasks = await this.prisma.task.findMany({ where: { AND: [{ id: { in: notifications.flatMap(n => n.taskId ? [n.taskId] : []) } }, taskScope(actor)] }, select: { id: true, title: true, dueAt: true } });
     const quotes = await this.prisma.quoteVersion.findMany({ where: { id: { in: notifications.flatMap(n => n.quoteVersionId ? [n.quoteVersionId] : []) }, quote: { company: companyScope(actor) } }, select: { id: true, quoteId: true, title: true } });
-    return notifications.filter(n => tasks.some(t => t.id === n.taskId) || quotes.some(q => q.id === n.quoteVersionId)).map(n => ({ ...n, task: tasks.find(t => t.id === n.taskId), quote: quotes.find(q => q.id === n.quoteVersionId) }));
+    const message = await messages(notifications.flatMap(n => n.messageId ? [n.messageId] : []));
+    return notifications.filter(n => tasks.some(t => t.id === n.taskId) || quotes.some(q => q.id === n.quoteVersionId) || (n.messageId && message.has(n.messageId)))
+      .map(n => ({ ...n, task: tasks.find(t => t.id === n.taskId), quote: quotes.find(q => q.id === n.quoteVersionId), message: n.messageId ? message.get(n.messageId) : undefined }));
   }
-  async readNotification(actor: Actor, id: string) {
+  async readNotification(actor: Actor, id: string, messages: MessageResolver) {
     const notification = await this.prisma.notification.findFirst({ where: { id, userId: actor.id } });
     if (!notification) throw new NotFoundException();
     if (notification.taskId) await this.task(actor, notification.taskId);
+    else if (notification.messageId) { if (!(await messages([notification.messageId])).size) throw new NotFoundException(); }
     else if (!await this.prisma.quoteVersion.findFirst({ where: { id: notification.quoteVersionId!, quote: { company: companyScope(actor) } } })) throw new NotFoundException();
     return this.prisma.notification.update({ where: { id }, data: { readAt: new Date() } });
   }

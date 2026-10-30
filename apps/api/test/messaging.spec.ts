@@ -41,10 +41,10 @@ test('Phase 8 (F8-02): team messaging core', async t => {
       await post(salesA, genel.id, 'Katılmadan yazamam').expect(403);
       await call(salesA, 'post', `/messaging/conversations/${genel.id}/join`).expect(201);
       const first = (await post(salesA, genel.id, 'Merhaba ekip').expect(201)).body;
-      assert.equal(first.seq, 1);
+      assert.equal(first.seq, genel.lastSeq + 1);
       await call(viewer, 'post', `/messaging/conversations/${genel.id}/join`).expect(201);
       await post(viewer, genel.id, 'Salt okunur').expect(403);
-      assert.equal((await call(viewer, 'get', `/messaging/conversations/${genel.id}/messages`).expect(200)).body.items[0].body, 'Merhaba ekip');
+      assert.equal((await call(viewer, 'get', `/messaging/conversations/${genel.id}/messages`).expect(200)).body.items.at(-1).body, 'Merhaba ekip');
       const duyurular = await channel(salesA, 'duyurular');
       for (const s of [salesA, manager]) await call(s, 'post', `/messaging/conversations/${duyurular.id}/join`).expect(201);
       await post(salesA, duyurular.id, 'Duyuru').expect(403);

@@ -4,8 +4,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type Me } from '../../../lib/api';
-import { conversationKindLabels, conversationsKey, displayName, listInterval, recordLabels, recordPath, roleLabels, type Colleague, type Conversation, type ConversationDetail, type ConversationKind, type ConversationList } from '../../../lib/messaging';
+import { conversationKindLabels, conversationsKey, displayName, recordLabels, recordPath, roleLabels, type Colleague, type Conversation, type ConversationDetail, type ConversationKind, type ConversationList } from '../../../lib/messaging';
 import { ConversationFiles, MessageStream } from '../../../components/conversation';
+import { useLiveIntervals } from '../../../components/live';
 import { Action, Badge, Editor, Loading, Notice, Title, useData, useMe } from '../../../components/ui';
 
 const sections: { kind: ConversationKind; title: string; empty: string }[] = [
@@ -85,14 +86,14 @@ function ActiveConversation({ id, me, close }: { id: string; me: Me; close: () =
 }
 
 function Messages() {
-  const params = useSearchParams(); const router = useRouter(); const cache = useQueryClient(); const { data: me } = useMe();
+  const params = useSearchParams(); const router = useRouter(); const cache = useQueryClient(); const { data: me } = useMe(); const live = useLiveIntervals();
   const active = params.get('c');
-  const list = useQuery({ queryKey: conversationsKey, queryFn: () => api<ConversationList>('/messaging/conversations'), refetchInterval: listInterval, retry: false });
+  const list = useQuery({ queryKey: conversationsKey, queryFn: () => api<ConversationList>('/messaging/conversations'), refetchInterval: live.list, retry: false });
   // Remounting the creation forms after a successful create closes and clears them.
   const [formsKey, setFormsKey] = useState(0);
   const go = async (id: string) => { await cache.invalidateQueries({ queryKey: conversationsKey }); setFormsKey(k => k + 1); router.push(`/messages?c=${id}`); };
   if (!me) return <Loading />;
-  return <><Title title="Mesajlar" subtitle="Ekip içi yazışma: kanallar, birebir mesajlar, özel gruplar ve firma, fırsat, proje kayıtlarına bağlı konuşmalar. Yeni mesajlar birkaç saniye içinde kendiliğinden görünür." />
+  return <><Title title="Mesajlar" subtitle="Ekip içi yazışma: kanallar, birebir mesajlar, özel gruplar ve firma, fırsat, proje kayıtlarına bağlı konuşmalar. Yeni mesajlar anında görünür; canlı bağlantı koparsa birkaç saniyede bir yenilenir." />
     <div className={`chat-layout${active ? ' has-active' : ''}`}>
       <nav className="chat-list" aria-label="Konuşmalar">
         <Notice error={list.error} />{list.isLoading && <Loading />}

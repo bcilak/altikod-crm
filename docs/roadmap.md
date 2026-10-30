@@ -1,6 +1,6 @@
 # IT SalesHub — Uygulama yol haritası
 
-Tarih: 30 Ekim 2026. Durum: Faz 0–4 ve Faz 6 uygulandı ve yerelde doğrulandı (`docs/phase-6.md`); Faz 7 ürün sahibi kararıyla kapsam dışı. Faz 8 (ekip içi mesajlaşma ve belge paylaşımı): kararlar varsayılanlarla kabul edildi, F8-02 API çekirdeği, F8-03 ekranları ve F8-04 dosya ekleri/ClamAV taraması uygulandı; canlı akış ve bildirim henüz yok — `docs/phase-8-team-messaging.md`. Faz 5 yazılımı uygulandı; SMTP adaptörü ve en az yetkili DB rolü eklendi. Gerçek pilot ve canlı geçiş kapıları açık. Güncel kayıt: `docs/phases-4-5.md`. Güncel teslimat kaydı `docs/phases-1-3.md`; Faz 0 tarihsel kaydı `docs/phase-0-status.md`. Kaynak plan korunmuştur. Faz 1–3 yetki ve akış varsayımları kodda uygulanmıştır; teklif ve canlıya çıkış kararları ilgili faz öncesi kesinleştirilir.
+Tarih: 30 Ekim 2026. Durum: Faz 0–4 ve Faz 6 uygulandı ve yerelde doğrulandı (`docs/phase-6.md`); Faz 7 ürün sahibi kararıyla kapsam dışı. Faz 8 (ekip içi mesajlaşma ve belge paylaşımı): kararlar varsayılanlarla kabul edildi, F8-02 API çekirdeği, F8-03 ekranları, F8-04 dosya ekleri/ClamAV taraması ve F8-05 canlı akış/bahsetme/bildirimler uygulandı; arama, düzenleme/silme, saklama ve pilot açık — `docs/phase-8-team-messaging.md`. Faz 5 yazılımı uygulandı; SMTP adaptörü ve en az yetkili DB rolü eklendi. Gerçek pilot ve canlı geçiş kapıları açık. Güncel kayıt: `docs/phases-4-5.md`. Güncel teslimat kaydı `docs/phases-1-3.md`; Faz 0 tarihsel kaydı `docs/phase-0-status.md`. Kaynak plan korunmuştur. Faz 1–3 yetki ve akış varsayımları kodda uygulanmıştır; teklif ve canlıya çıkış kararları ilgili faz öncesi kesinleştirilir.
 
 ## MVP sınırı
 
@@ -22,7 +22,7 @@ MVP dışı: akademi, kapsamlı bilgi yayın sistemi ve proje yönetimi, e-posta
 | 5 | Dashboard, CSV import/export, devir özeti/görev, pilot, canlı hazırlığı | 4 | Gerçek pilot, izin/E2E testleri ve DB+dosya geri yükleme tatbikatı tamamlanır |
 | 6 | Bilgi bankası, akademi, proje teslimatı | 5 | Onaylı içerik ve eğitim ilerlemesi; tek fırsata tek proje |
 | 7 | İhtiyaca göre entegrasyonlar, ardından AI — **kapsam dışı (ürün sahibi kararı)** | 6 | — |
-| 8 | Ekip içi mesajlaşma: kanal, grup, birebir, kayıt konuşması, dosya paylaşımı — **F8-02…04 uygulandı, F8-05…07 açık** | 6 | Kayıt kapsamı mesaj/dosya/arama/canlı akışta korunur; dosya taraması; pilot ekip WhatsApp yerine kullanır |
+| 8 | Ekip içi mesajlaşma: kanal, grup, birebir, kayıt konuşması, dosya paylaşımı — **F8-02…05 uygulandı, F8-06…07 açık** | 6 | Kayıt kapsamı mesaj/dosya/arama/canlı akışta korunur; dosya taraması; pilot ekip WhatsApp yerine kullanır |
 
 Süre tahmini, Faz 0 doğrulaması ve ekip kapasitesi görüldükten sonra yapılacak. Her iş küçük, gözden geçirilebilir bir teslimat olmalı.
 
@@ -48,7 +48,8 @@ Süre tahmini, Faz 0 doğrulaması ve ekip kapasitesi görüldükten sonra yapı
 - F8-02: Konuşma/üyelik/mesaj şeması ve migration, izinler, kayıt kapsamı, idempotent gönderim, okundu, OpenAPI — uygulandı ve entegrasyon testleriyle doğrulandı; `docs/phase-8-team-messaging.md`.
 - F8-03: Mesajlar sayfası, menüde okunmamış sayacı, firma/fırsat/proje sayfalarında “Konuşma” bölümü, 10/15 sn yoklama — uygulandı; entegrasyon ve Playwright testleriyle doğrulandı.
 - F8-04: Mesaj ekleri (içerikten tür tespiti, makro reddi, 20 MB/5 dosya), ClamAV taraması ve karantina, Dosyalar listesi, yedek kapsamı — uygulandı; gerçek clamd (yerel test imzası) ve Playwright ile doğrulandı. Yedek tatbikatı Docker olmadığı için bu ortamda çalıştırılamadı.
-- F8-05…F8-07: Canlı akış/bildirim, arama ve düzenleme/saklama, pilot — açık.
+- F8-05: SSE + PostgreSQL LISTEN/NOTIFY canlı akış, @bahsetme, bahsetme/birebir/yanıt bildirimleri, yeniden bağlanma — uygulandı; entegrasyon ve Playwright testleriyle doğrulandı.
+- F8-06…F8-07: Arama, sabitleme, düzenleme/silme, moderasyon, saklama işi, “Bilgi bankasına öner”; pilot — açık.
 
 ## Faz başlamadan kesinleştirilecek iş kararları
 

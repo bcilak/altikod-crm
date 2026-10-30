@@ -58,7 +58,7 @@ Bu liste test planıdır; uygulandı/geçti iddiası değildir. Çalıştırılm
 
 ## Faz 8
 
-Ayrıntı: `docs/phase-8-team-messaging.md`. F8-02'de ilk iki madde ve tekrarlanan gönderimin tek mesaj üretmesi API düzeyinde test edildi. F8-03'te erişimi olmayan kullanıcının kayıt konuşmasını doğrudan adresle açamaması, klavyeyle gönderim ve 390 px'te taşma olmaması tarayıcıda test edildi. SSE ve bildirim kısmı F8-05'te, dosya maddesi F8-04'te test edildi (tür, makro, boyut, ad ve taranmamış dosyanın indirilememesi).
+Ayrıntı: `docs/phase-8-team-messaging.md`. F8-02'de ilk iki madde ve tekrarlanan gönderimin tek mesaj üretmesi API düzeyinde test edildi. F8-03'te erişimi olmayan kullanıcının kayıt konuşmasını doğrudan adresle açamaması, klavyeyle gönderim ve 390 px'te taşma olmaması tarayıcıda test edildi. SSE ve bildirim kısmı F8-05'te test edildi (yalnız kimlik taşıyan olaylar, paylaşım iptalinden sonra olay gitmemesi, tekrar gönderimde tek bildirim); dosya maddesi F8-04'te test edildi (tür, makro, boyut, ad ve taranmamış dosyanın indirilememesi).
 
 - Kayıt konuşmasının mesajları, dosyaları ve arama sonuçları kayıt kapsamı dışındaki kullanıcıya hiçbir uçtan (ID, liste, arama, SSE, bildirim, dosya adresi) görünmez; paylaşım iptali anında uygulanır.
 - Özel grup ve birebir konuşmalar üye olmayana, ADMIN dahil, görünmez.

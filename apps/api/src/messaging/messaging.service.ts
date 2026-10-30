@@ -10,7 +10,10 @@ import { projectScope } from '../delivery/projects.service';
 type RecordType = typeof conversationRecordTypes[number];
 const userCard = { select: { id: true, name: true, isActive: true } } as const;
 export const attachmentSelect = { id: true, name: true, mimeType: true, size: true, scanStatus: true } as const;
-const messageSelect = { id: true, seq: true, conversationId: true, parentId: true, body: true, createdAt: true, author: userCard, attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } } } as const satisfies Prisma.MessageSelect;
+const messageSelect = { id: true, seq: true, conversationId: true, parentId: true, body: true, createdAt: true, author: userCard, attachments: { select: attachmentSelect, orderBy: { createdAt: 'asc' } }, mentions: { select: { user: { select: { id: true, name: true } } } } } as const satisfies Prisma.MessageSelect;
+type MessageRow = Prisma.MessageGetPayload<{ select: typeof messageSelect }>;
+const shape = <T extends MessageRow>({ mentions, ...m }: T) => ({ ...m, mentions: mentions.map(x => x.user) });
+export type MessageNotificationType = 'MESSAGE_MENTION' | 'MESSAGE_DIRECT' | 'MESSAGE_REPLY';
 const listInclude = (actorId: string) => ({
   members: { where: { leftAt: null }, select: { userId: true, role: true, user: userCard } },
   reads: { where: { userId: actorId }, select: { lastReadSeq: true } },
@@ -232,7 +235,7 @@ export class MessagingService {
     });
     const hasMore = rows.length > q.limit; const page = rows.slice(0, q.limit);
     if (!ascending) page.reverse();
-    return { items: page.map(({ _count, ...m }) => ({ ...m, replyCount: _count.replies })), hasMore, lastSeq: row.lastSeq, readSeq: row.reads[0]?.lastReadSeq ?? 0 };
+    return { items: page.map(({ _count, ...m }) => ({ ...shape(m), replyCount: _count.replies })), hasMore, lastSeq: row.lastSeq, readSeq: row.reads[0]?.lastReadSeq ?? 0 };
   }
   /** Idempotent per (author, clientNonce): a retried request returns the original message instead of posting twice. Attached drafts are linked exactly once. */
   async send(actor: Actor, id: string, input: z.infer<typeof messageCreateSchema>) {
@@ -240,8 +243,9 @@ export class MessagingService {
       const prior = await this.prisma.message.findUnique({ where: { authorId_clientNonce: { authorId: actor.id, clientNonce: input.clientNonce } }, select: messageSelect });
       if (!prior) return undefined;
       await this.visible(this.prisma, actor, id);
-      if (prior.conversationId !== id || prior.body !== input.body || prior.parentId !== (input.parentId ?? null) || prior.attachments.map(a => a.id).sort().join() !== [...input.attachmentIds].sort().join()) throw new ConflictException('Bu istek anahtarı başka bir mesaj için kullanıldı');
-      return { ...prior, replyCount: 0 };
+      if (prior.conversationId !== id || prior.body !== input.body || prior.parentId !== (input.parentId ?? null) || prior.attachments.map(a => a.id).sort().join() !== [...input.attachmentIds].sort().join()
+        || prior.mentions.map(m => m.user.id).sort().join() !== input.mentionIds.filter(m => m !== actor.id).sort().join()) throw new ConflictException('Bu istek anahtarı başka bir mesaj için kullanıldı');
+      return { ...shape(prior), replyCount: 0 };
     };
     const prior = await replay();
     if (prior) return prior;
@@ -251,22 +255,58 @@ export class MessagingService {
         if (row.archivedAt) throw new ConflictException('Arşivlenmiş konuşmaya yazılamaz');
         if (!await canPost(db, actor, row)) throw new ForbiddenException('Bu konuşmaya yazma yetkiniz yok');
         if (input.parentId && !await db.message.findFirst({ where: { id: input.parentId, conversationId: id, parentId: null }, select: { id: true } })) throw new NotFoundException('Yanıtlanan mesaj bulunamadı');
-        // The row update serialises writers per conversation and hands out a gap-free sequence number.
+        const mentioned = await this.mentionable(db, actor, row, input.mentionIds);
         if (input.attachmentIds.length && await db.messageAttachment.count({ where: { id: { in: input.attachmentIds }, conversationId: id, uploadedById: actor.id, messageId: null, scanStatus: { in: ['PENDING', 'CLEAN', 'UNSCANNED'] } } }) !== input.attachmentIds.length) {
           throw new ConflictException('Eklerden biri bulunamadı, başka bir mesajda kullanıldı veya güvenlik taramasından geçemedi');
         }
+        // The row update serialises writers per conversation and hands out a gap-free sequence number.
         const { lastSeq: seq } = await db.conversation.update({ where: { id }, data: { lastSeq: { increment: 1 }, lastMessageAt: new Date() }, select: { lastSeq: true } });
         const created = await db.message.create({ data: { conversationId: id, seq, authorId: actor.id, parentId: input.parentId, body: input.body, clientNonce: input.clientNonce }, select: { id: true } });
         if (input.attachmentIds.length && (await db.messageAttachment.updateMany({ where: { id: { in: input.attachmentIds }, messageId: null }, data: { messageId: created.id } })).count !== input.attachmentIds.length) throw new ConflictException('Ekler başka bir mesaja bağlandı; tekrar deneyin');
+        if (mentioned.length) await db.messageMention.createMany({ data: mentioned.map(u => ({ messageId: created.id, userId: u.id })) });
+        await this.notify(db, actor, row, created.id, input.parentId, mentioned.map(u => u.id));
         const message = await db.message.findUniqueOrThrow({ where: { id: created.id }, select: messageSelect });
         await this.markRead(db, id, actor.id, seq);
-        return { ...message, replyCount: 0 };
+        return { ...shape(message), replyCount: 0 };
       });
     } catch (error) {
       const raced = isUniqueViolation(error) ? await replay() : undefined;
       if (raced) return raced;
       throw error;
     }
+  }
+  /** Mentions must point at people who can already read the conversation; mentioning never shares a record. Self-mentions are dropped. */
+  private async mentionable(db: Db, actor: Actor, conversation: Row, ids: string[]) {
+    const wanted = ids.filter(id => id !== actor.id);
+    if (!wanted.length) return [];
+    const users = await db.user.findMany({ where: { id: { in: wanted }, isActive: true }, select: { id: true, name: true, role: true } });
+    if (users.length !== wanted.length) throw new BadRequestException('Bahsedilen kişilerden biri bulunamadı veya pasif');
+    const blind: string[] = [];
+    for (const user of users) if (!await db.conversation.findFirst({ where: { AND: [{ id: conversation.id }, conversationScope(user)] }, select: { id: true } })) blind.push(user.name);
+    if (blind.length) throw new ConflictException(conversation.kind === 'RECORD'
+      ? `${blind.join(', ')} bu kaydı göremiyor. Bahsetmek erişim vermez; gerekiyorsa önce kaydı paylaşın.`
+      : `${blind.join(', ')} bu konuşmanın üyesi değil`);
+    return users;
+  }
+  /**
+   * One notification per recipient and message: a mention wins over a direct message, which wins over a thread reply.
+   * Thread reply recipients are the parent's author and earlier repliers who can still see the conversation. Plain channel
+   * messages notify nobody (the unread counter covers them). The payload is only the message id; content is never copied.
+   */
+  private async notify(db: Db, actor: Actor, conversation: Row, messageId: string, parentId: string | undefined, mentioned: string[]) {
+    const recipients = new Map<string, MessageNotificationType>(mentioned.map(id => [id, 'MESSAGE_MENTION']));
+    if (conversation.kind === 'DIRECT') for (const m of conversation.members) if (m.userId !== actor.id && m.user.isActive && !recipients.has(m.userId)) recipients.set(m.userId, 'MESSAGE_DIRECT');
+    if (parentId) {
+      const thread = await db.message.findMany({ where: { OR: [{ id: parentId }, { parentId }], authorId: { notIn: [actor.id, ...recipients.keys()] }, author: { isActive: true } }, distinct: ['authorId'], select: { author: { select: { id: true, role: true } } } });
+      for (const { author } of thread) if (await db.conversation.findFirst({ where: { AND: [{ id: conversation.id }, conversationScope(author)] }, select: { id: true } })) recipients.set(author.id, 'MESSAGE_REPLY');
+    }
+    if (recipients.size) await db.notification.createMany({ data: [...recipients].map(([userId, type]) => ({ userId, messageId, type, dedupeKey: `message:${messageId}:${userId}` })), skipDuplicates: true });
+  }
+  /** For the notification list: what the reader may see about each message, resolved with the reader's current access. */
+  async notificationTargets(actor: Actor, messageIds: string[]) {
+    if (!messageIds.length) return new Map<string, { conversationId: string; conversation: string | null; author: string; parentId: string | null }>();
+    const rows = await this.prisma.message.findMany({ where: { id: { in: messageIds }, conversation: conversationScope(actor) }, select: { id: true, parentId: true, author: { select: { name: true } }, conversation: { include: listInclude(actor.id) } } });
+    return new Map(rows.map(r => { const c = this.dto(actor, r.conversation); return [r.id, { conversationId: c.id, conversation: c.kind === 'CHANNEL' ? `#${c.name}` : c.name, author: r.author.name, parentId: r.parentId }]; }));
   }
   async read(actor: Actor, id: string, seq: number) {
     const row = await this.visible(this.prisma, actor, id);

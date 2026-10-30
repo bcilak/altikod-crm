@@ -36,6 +36,10 @@ Olay kurtarmasında yazıları bakım moduyla durdurun, mevcut durumu ayrıca ye
 
 Production'da `MAIL_TRANSPORT=smtp` zorunludur; API eksik veya şifresiz SMTP ayarıyla başlamaz (hata yalnız alan adlarını gösterir, değerleri göstermez). Gerekenler: `SMTP_HOST`, `SMTP_PORT` (varsayılan 587), `SMTP_SECURITY` (`starttls` varsayılan, `tls` 465 için), isteğe bağlı `SMTP_USER`/`SMTP_PASSWORD` (birlikte), `MAIL_FROM` (ör. `Altıkod CRM <crm@altikod.com>`). Sağlayıcıdan bağımsızdır (Google Workspace, Microsoft 365, Yandex, kurumsal relay vb.). Gönderen alan adı için SPF, DKIM ve DMARC kayıtları sağlayıcının rehberine göre yapılmalıdır; bu kayıtlar ve gerçek teslim yerelde doğrulanmadı. URL tek kullanımlık token taşıdığından e-posta içeriği loglanmaz; başarısız sıfırlama gönderimi yalnız `mail_delivery_failed` olayı olarak loglanır.
 
+### Canlı mesajlaşma akışı (SSE)
+
+`GET /api/v1/messaging/stream` uzun ömürlü bir HTTP yanıtıdır. Her API süreci veritabanına mesajlaşma sinyalleri için bir ek `LISTEN` bağlantısı açar (bağlantı havuzu planlanırken hesaba katın). Ters vekil bu yolu tamponlamamalı ve kısa okuma zaman aşımı uygulamamalıdır; yanıt `Cache-Control: no-store, no-transform` ve `X-Accel-Buffering: no` taşır, sunucu 25 saniyede bir yorum satırıyla bağlantıyı canlı tutar. Caddy'nin mevcut yapılandırması yerelde 2.6.2 ile doğrulandı. Akış kullanılamazsa web arayüzü kısa aralıklı yenilemeye düşer; işlev kaybı olmaz, yalnız gecikme artar.
+
 ### Dosya taraması (ClamAV)
 
 Mesajlarda paylaşılan her dosya indirilebilir olmadan önce ClamAV ile taranır. Production'da `MALWARE_SCANNER=clamd` ve `CLAMD_HOST` zorunludur; API bunlar olmadan başlamaz. `deploy/compose.production.yml` `clamav/clamav:1.4` servisini (imza veritabanı `clamav-db` volume'ünde) başlatır ve API'yi bu servis sağlıklı olana kadar bekletir. ClamAV yaklaşık 1,5–2 GB bellek ister; ilk açılışta imzaları indirdiği için birkaç dakika sürer; imzalar container içinde `freshclam` ile güncellenir. İmza güncelliği ve bellek alarmı izlemeye bağlanmalıdır.

@@ -63,3 +63,10 @@ a.file-chip:hover{background:var(--dp-color-selection)}
 .file-thumb{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--dp-color-outline);flex-shrink:0}
 .composer-actions{flex-wrap:wrap}.composer-hint{flex:1;min-width:180px;font-size:12px}
 .record-files{margin-top:14px}.record-files summary{cursor:pointer;font-weight:700;font-size:15px}
+/* F8-05: mentions */
+.mention{font-weight:700;color:var(--dp-color-accent-strong);background:var(--dp-color-field-soft);border-radius:6px;padding:0 3px}
+.mention.me{background:var(--dp-color-accent-warm);color:var(--dp-color-ink);box-shadow:0 0 0 1px var(--dp-color-outline)}
+.composer{position:relative}
+.mention-options{list-style:none;margin:0;padding:6px;border:2px solid var(--dp-color-outline);border-radius:12px;background:var(--dp-color-panel);box-shadow:3px 3px 0 var(--dp-color-outline);display:grid;gap:2px;max-width:420px}
+.mention-options li{padding:8px 10px;border-radius:8px;cursor:pointer;min-height:40px}
+.mention-options li[aria-selected=true],.mention-options li:hover{background:var(--dp-color-selection)}

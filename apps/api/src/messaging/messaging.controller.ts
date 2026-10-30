@@ -1,5 +1,5 @@
 import { Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res } from '@nestjs/common';
-import { ApiBody, ApiConsumes, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiProduces, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { conversationCreateSchema, conversationListSchema, conversationMembersSchema, conversationPatchSchema, conversationReadSchema, directConversationSchema, messageCreateSchema, messageListSchema, recordConversationSchema } from '@saleshub/shared';
@@ -7,6 +7,7 @@ import { Access, type AuthRequest } from '../security/access';
 import { ValidatedBody as Input, ZodValidationPipe as V } from '../validation.pipe';
 import { MessagingService } from './messaging.service';
 import { MessageAttachmentsService } from './attachments.service';
+import { MessagingStream } from './stream.service';
 
 const UUID = new ParseUUIDPipe();
 const userSearchSchema = z.object({ search: z.string().trim().max(100).optional() }).strict();
@@ -14,7 +15,12 @@ const userSearchSchema = z.object({ search: z.string().trim().max(100).optional(
 /** Team messaging (Phase 8). Every route needs messaging.use; channel management is checked per conversation in the service. */
 @ApiTags('messaging') @Access('messaging', 'use') @Controller('messaging')
 export class MessagingController {
-  constructor(private readonly messaging: MessagingService, private readonly attachments: MessageAttachmentsService) {}
+  constructor(private readonly messaging: MessagingService, private readonly attachments: MessageAttachmentsService, private readonly live: MessagingStream) {}
+  /**
+   * Server-Sent Events: `message` {conversationId, seq}, `attachment` {conversationId}, `notification` {} and `ready`.
+   * Events never contain message content; clients refetch through the regular endpoints. Reconnect after `retry`.
+   */
+  @ApiProduces('text/event-stream') @Get('stream') stream(@Req() r: AuthRequest, @Res() res: Response) { return this.live.subscribe(r.actor, r, res); }
   @Get('conversations') list(@Req() r: AuthRequest, @Query(new V(conversationListSchema)) q: z.infer<typeof conversationListSchema>) { return this.messaging.list(r.actor, q); }
   @Post('conversations') create(@Req() r: AuthRequest, @Input(conversationCreateSchema) b: z.infer<typeof conversationCreateSchema>) { return this.messaging.create(r.actor, b); }
   @Post('direct') direct(@Req() r: AuthRequest, @Input(directConversationSchema) b: z.infer<typeof directConversationSchema>) { return this.messaging.direct(r.actor, b.userId); }

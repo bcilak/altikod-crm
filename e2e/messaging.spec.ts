@@ -40,6 +40,13 @@ test('team messaging: channel, direct message, thread, unread badge, record conv
   await composer.fill('E2E merhaba ekip\nikinci satır'); await composer.press('Enter');
   await expect(page.getByRole('log', { name: 'Mesajlar' }).getByText('E2E merhaba ekip')).toBeVisible();
   await expect(composer).toHaveValue('');
+  // @-mention: suggestions come up while typing; Enter picks the highlighted person instead of sending.
+  await composer.pressSequentially('@E2E Sat');
+  await expect(page.getByRole('listbox', { name: 'Bahsedilecek kişi' }).getByRole('option', { name: /E2E Satış Uzmanı/ })).toBeVisible();
+  await composer.press('Enter');
+  await expect(composer).toHaveValue('@E2E Satış Uzmanı ');
+  await composer.pressSequentially('kanal toplantısı 14:00'); await composer.press('Enter');
+  await expect(page.getByRole('log', { name: 'Mesajlar' }).locator('.mention', { hasText: '@E2E Satış Uzmanı' })).toBeVisible();
 
   const direct = page.locator('details').filter({ has: page.locator('summary', { hasText: 'Yeni birebir mesaj' }) });
   await direct.locator('summary').click();
@@ -78,7 +85,18 @@ test('team messaging: channel, direct message, thread, unread badge, record conv
   await sales.getByRole('button', { name: 'Yanıtla' }).first().click();
   await sales.getByLabel('Yanıt yaz').fill('Bakıyorum, öğleden sonra dönerim.'); await sales.getByLabel('Yanıt yaz').press('Enter');
   await expect(sales.getByRole('log', { name: 'Yanıtlar' }).getByText('Bakıyorum, öğleden sonra dönerim.')).toBeVisible();
-  await expect(page.getByRole('button', { name: '1 yanıt' })).toBeVisible();
+  // Live update: the reply reaches the other open page well inside the 60 s safety-net poll.
+  await expect(page.getByRole('button', { name: '1 yanıt' })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText('canlı bağlantı yok')).toHaveCount(0);
+
+  // The mention produced a notification that names the conversation and author but not the text.
+  await expect(sales.getByRole('link', { name: /Bildirimler.*okunmamış/ })).toBeVisible({ timeout: 5_000 });
+  await sales.getByRole('link', { name: /^Bildirimler/ }).click();
+  const mentionNote = sales.locator('article').filter({ hasText: 'Sizden bahsedildi' });
+  await expect(mentionNote.getByRole('link', { name: 'DEMO E2E Admin · #genel' })).toBeVisible();
+  await expect(sales.getByText('kanal toplantısı')).toHaveCount(0);
+  await mentionNote.getByRole('link', { name: 'DEMO E2E Admin · #genel' }).click();
+  await expect(sales.locator('.mention.me', { hasText: '@E2E Satış Uzmanı' })).toBeVisible();
 
   // Record conversation lives on the company page and stays invisible to a colleague without access.
   const firm = await send('post', '/companies', { displayName: 'E2E Mesaj Firması', legalName: 'E2E Mesaj AŞ' });

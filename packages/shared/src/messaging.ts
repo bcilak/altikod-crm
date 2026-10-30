@@ -18,6 +18,8 @@ export type MessageAttachmentExtension = typeof messageAttachmentTypes[keyof typ
 export const messageAttachmentAccept = '.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx,.csv,.txt';
 export const messageAttachmentMaxBytes = 20 * 1024 * 1024;
 export const messageAttachmentsPerMessage = 5;
+export const messageMentionsPerMessage = 20;
+export const messageNotificationLabels: Record<string, string> = { MESSAGE_MENTION: 'Sizden bahsedildi', MESSAGE_DIRECT: 'Yeni birebir mesaj', MESSAGE_REPLY: 'Mesaj dizinize yanıt geldi' };
 export const attachmentScanLabels: Record<string, string> = { PENDING: 'Güvenlik taraması sürüyor', CLEAN: 'Tarandı', INFECTED: 'Zararlı içerik tespit edildi; indirilemez', FAILED: 'Tarama tamamlanamadı; indirilemez', UNSCANNED: 'Taranmadı (yalnız geliştirme ortamı)' };
 
 const name = z.string().trim().min(1).max(80);
@@ -35,9 +37,10 @@ export const recordConversationSchema = z.object({ recordType: z.enum(conversati
 export const conversationMembersSchema = z.object({ userIds: z.array(uuid).min(1).max(groupMaxMembers - 1) }).strict();
 export const conversationListSchema = z.object({ kind: z.enum(conversationKinds).optional() }).strict();
 /** clientNonce makes retries idempotent: the same author and nonce always yield the same message. */
-export const messageCreateSchema = z.object({ body: messageBodySchema.default(''), parentId: uuid.optional(), clientNonce: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/), attachmentIds: z.array(uuid).max(messageAttachmentsPerMessage).default([]) }).strict()
+export const messageCreateSchema = z.object({ body: messageBodySchema.default(''), parentId: uuid.optional(), clientNonce: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/), attachmentIds: z.array(uuid).max(messageAttachmentsPerMessage).default([]), mentionIds: z.array(uuid).max(messageMentionsPerMessage).default([]) }).strict()
   .refine(m => m.body.length > 0 || m.attachmentIds.length > 0, { message: 'Mesaj metni veya dosya gerekli', path: ['body'] })
-  .refine(m => new Set(m.attachmentIds).size === m.attachmentIds.length, { message: 'Aynı dosya iki kez eklenemez', path: ['attachmentIds'] });
+  .refine(m => new Set(m.attachmentIds).size === m.attachmentIds.length, { message: 'Aynı dosya iki kez eklenemez', path: ['attachmentIds'] })
+  .refine(m => new Set(m.mentionIds).size === m.mentionIds.length, { message: 'Aynı kişi iki kez bahsedilemez', path: ['mentionIds'] });
 export const messageListSchema = z.object({ beforeSeq: z.coerce.number().int().positive().optional(), afterSeq: z.coerce.number().int().min(0).optional(), parentId: uuid.optional(), limit: z.coerce.number().int().min(1).max(100).default(50) }).strict()
   .refine(q => q.beforeSeq === undefined || q.afterSeq === undefined, 'beforeSeq ve afterSeq birlikte kullanılamaz');
 export const conversationReadSchema = z.object({ seq: z.number().int().min(0) }).strict();

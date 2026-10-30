@@ -9,7 +9,8 @@ export type ConversationDetail = Conversation & { canPost: boolean; canManage: b
 export type ConversationList = { items: Conversation[]; unreadTotal: number };
 export type Attachment = { id: string; name: string; mimeType: string; size: number; scanStatus: 'PENDING' | 'CLEAN' | 'INFECTED' | 'FAILED' | 'UNSCANNED' };
 export type SharedFile = Attachment & { createdAt: string; uploadedBy: { id: string; name: string }; message: { id: string; seq: number; parentId: string | null } };
-export type Message = { id: string; seq: number; parentId: string | null; body: string; createdAt: string; author: Author; replyCount: number; attachments: Attachment[] };
+export type Mention = { id: string; name: string };
+export type Message = { id: string; seq: number; parentId: string | null; body: string; createdAt: string; author: Author; replyCount: number; attachments: Attachment[]; mentions: Mention[] };
 /** The server re-checks scan state on every download; this only decides whether to offer a link. */
 export const downloadable = (a: Attachment) => a.scanStatus === 'CLEAN' || a.scanStatus === 'UNSCANNED';
 export const attachmentUrl = (id: string, inline = false) => `/api/v1/messaging/attachments/${id}${inline ? '?inline=1' : ''}`;

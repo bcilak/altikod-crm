@@ -63,6 +63,7 @@ model User {
   conversationReads ConversationReadState[]
   messages Message[]
   messageAttachments MessageAttachment[]
+  messageMentions MessageMention[]
 }
 model RolePermission {
   role     Role
@@ -288,11 +289,14 @@ model Notification {
   user         User @relation(fields: [userId], references: [id])
   taskId       String? @db.Uuid
   quoteVersionId String? @db.Uuid
+  messageId    String? @db.Uuid
+  message      Message? @relation(fields: [messageId], references: [id], onDelete: Restrict)
   type         String
   dedupeKey    String @unique
   readAt       DateTime? @db.Timestamptz(6)
   createdAt    DateTime @default(now()) @db.Timestamptz(6)
   @@index([userId, readAt])
+  @@index([messageId])
 }
 
 enum QuoteStatus {
@@ -704,6 +708,8 @@ model Message {
   parent         Message?     @relation("MessageReplies", fields: [parentId], references: [id], onDelete: Restrict)
   replies        Message[]    @relation("MessageReplies")
   attachments    MessageAttachment[]
+  mentions       MessageMention[]
+  notifications  Notification[]
   body           String
   clientNonce    String
   createdAt      DateTime     @default(now()) @db.Timestamptz(6)
@@ -744,4 +750,14 @@ model MessageAttachment {
   @@index([conversationId, createdAt])
   @@index([scanStatus])
   @@index([uploadedById, messageId])
+}
+
+// Phase 8 (F8-05): who a message mentions. Mentions never grant access; they are validated against conversation visibility.
+model MessageMention {
+  messageId String @db.Uuid
+  message Message @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  userId String @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@id([messageId, userId])
+  @@index([userId])
 }

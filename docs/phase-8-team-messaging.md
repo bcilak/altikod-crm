@@ -1,6 +1,6 @@
 # Faz 8 — ekip içi mesajlaşma ve belge paylaşımı
 
-30 Ekim 2026. **Durum:** F8-01 kararları önerilen varsayılanlarla kabul edildi. **F8-02 (API çekirdeği), F8-03 (ekranlar) ve F8-04 (dosya ekleri ve virüs taraması) uygulandı ve test edildi.** Canlı akış ve bildirim (F8-05), arama/düzenleme/silme/saklama (F8-06) ve gerçek kullanıcılarla pilot (F8-07) henüz yok. Teslim kayıtları aşağıda “F8-02/03/04 teslimatı” bölümlerindedir. Faz 7 (entegrasyonlar ve AI) kapsam dışı kaldığı için bu iş Faz 8 olarak numaralandı; dış sisteme bağlanmadığı için Faz 7 kararıyla çelişmez.
+30 Ekim 2026. **Durum:** F8-01 kararları önerilen varsayılanlarla kabul edildi. **F8-02 (API çekirdeği), F8-03 (ekranlar), F8-04 (dosya ekleri ve virüs taraması) ve F8-05 (canlı akış, bahsetme ve bildirimler) uygulandı ve test edildi.** Arama/düzenleme/silme/saklama (F8-06) ve gerçek kullanıcılarla pilot (F8-07) henüz yok. Teslim kayıtları aşağıda “F8-02…05 teslimatı” bölümlerindedir. Faz 7 (entegrasyonlar ve AI) kapsam dışı kaldığı için bu iş Faz 8 olarak numaralandı; dış sisteme bağlanmadığı için Faz 7 kararıyla çelişmez.
 
 ## Sorun
 
@@ -220,6 +220,31 @@ F8-03 sonunda polling ile kullanılabilir bir sürüm olur; canlılık (F8-05) a
 - Entegrasyon testleri iki kez çalıştırıldı: (1) bu konteynere kurulan **gerçek ClamAV 1.5.4 `clamd`** ile — resmî imza veritabanı ağ politikası nedeniyle indirilemediğinden yalnız EICAR test dosyasını tanıyan yerel bir imza dosyasıyla; (2) `CLAMD_HOST` verilmediğinde testin kendi başlattığı INSTREAM protokolü taklidiyle (CI yolu). Gerçek imza veritabanıyla tespit kapasitesi burada doğrulanmadı.
 - 4 Playwright senaryosu geçti; mesajlaşma senaryosu PDF ve görsel eklemeyi, karşı tarafın PDF'yi indirip içeriğini doğrulamasını (Türkçe dosya adı korunarak), görselin küçük resim olarak yüklenmesini, Dosyalar listesini ve desteklenmeyen dosyanın hata mesajını kapsar.
 - Ortam notları: (a) Bu konteynerde `LANG` tanımsız olduğundan başsız Chromium, ASCII dışı `filename*` adlarını “download” olarak kaydediyordu; ayrı bir deneyle sunucu başlıklarının doğru olduğu ve `LANG=C.UTF-8` ile adın doğru geldiği gösterildi, E2E bu ayarla çalıştırıldı. (b) Yedekleme betiği Docker Compose gerektirdiği ve konteynerde Docker olmadığı için yedek tatbikatı çalıştırılamadı; yalnız betiğin referans sorgusu güncel şemada denendi. Tatbikat Docker'lı ortamda tekrarlanmalıdır. (c) `deploy/compose.production.yml` ClamAV servisi ve sağlık kontrolü burada çalıştırılmadı.
+
+## F8-05 teslimatı
+
+### Kullanım
+
+1. Yeni mesajlar, yanıtlar, dosya tarama sonuçları ve bildirimler açık sayfalarda anında görünür. Canlı bağlantı koparsa üst çubukta “canlı bağlantı yok, kısa aralıklarla yenileniyor” yazar, eski 10/15 saniyelik yenileme devreye girer ve tarayıcı artan aralıklarla (5 sn → 60 sn) yeniden bağlanır. Yeniden bağlanınca mesajlaşma verileri baştan çekilir, arada kaçan bir şey kalmaz.
+2. Yazarken `@` ve adın baş harfleri yazılınca kişi önerileri açılır (ok tuşları, Enter/Tab ile seçim, Esc ile kapatma). Seçilen ad metinde `@Ad Soyad` olarak kalır ve mesajda vurgulanır; kendi adınız daha belirgin görünür.
+3. Bildirim üretilen durumlar: sizden bahsedildiğinde, size birebir mesaj geldiğinde, yazdığınız veya yanıtladığınız bir mesaj dizisine yanıt geldiğinde. Bir mesaj için kişi başına tek bildirim oluşur (bahsetme > birebir > yanıt). Kanaldaki sıradan mesajlar bildirim üretmez; okunmamış sayacı yeterlidir.
+4. **Bildirimler** sayfası mesaj bildirimlerinde yazarı ve konuşmayı gösterir (ör. “Ayşe · #genel”), mesaj metnini göstermez; bağlantı konuşmayı açar. Yan menüde Bildirimler bağlantısı okunmamış bildirim sayısını gösterir.
+
+### Kurallar
+
+- Bahsetme erişim vermez: bahsedilen kişi konuşmayı zaten okuyabiliyor olmalıdır. Özel grup/kanal/birebirde üye olmayan kişi “üyesi değil”, kayıt konuşmasında erişimi olmayan kişi “bu kaydı göremiyor. Bahsetmek erişim vermez; gerekiyorsa önce kaydı paylaşın.” uyarısıyla reddedilir ve mesaj kaydedilmez. Kendinizden bahsetmeniz yok sayılır. Bahsetmeler mesajla birlikte değişmez kaydedilir (PostgreSQL tetikleyicisi).
+- Bildirimler mesajla aynı veritabanı işleminde, `message:<mesaj>:<kişi>` tekil anahtarıyla yazılır; aynı istek anahtarıyla tekrar gönderim ikinci bildirim üretmez. Plandaki outbox yerine bu yol seçildi: mesaj ve bildirim birlikte ya kaydedilir ya hiç kaydedilmez, ayrıca kuyruk gerekmez. Bildirim yalnız mesaj kimliğini tutar; liste ve okundu işlemi okuyanın o anki erişimiyle çözülür, erişimi kalkan kişinin bildirimi listeden düşer.
+- Canlı akış: `GET /api/v1/messaging/stream` (Server-Sent Events). `Message` ekleme, gönderilmiş ekin tarama sonucu ve `Notification` ekleme işlemleri commit anında PostgreSQL `NOTIFY` üretir; her API süreci tek bir `LISTEN` bağlantısıyla bunları alır. Tarayıcıya yazmadan önce oturum (iptal, süre, pasif kullanıcı) ve konuşma erişimi o anki rol ve paylaşımla yeniden denetlenir. Olaylar yalnız kimlik taşır (`message` {conversationId, seq}, `attachment` {conversationId}, `notification` {}), içerik taşımaz. 25 sn'de bir oturum yoklanır; çıkış yapan veya pasifleştirilen kullanıcının akışı en geç bu sürede, ilk olayda ise hemen kapanır. Kullanıcı başına 5, süreç başına 500 açık akış sınırı vardır. `LISTEN` bağlantısı koparsa tüm akışlar kapatılır, tarayıcılar yeniden bağlanıp verileri baştan çeker.
+- Yanıt `Cache-Control: no-store, no-transform` taşır; sıkıştıran ara katmanlar (ör. Next.js geliştirme sunucusunun `/api` yönlendirmesi) akışı tamponlamaz.
+
+### Doğrulama (30 Ekim 2026)
+
+- Lint, TypeScript, birim/smoke testleri ve üretim derlemesi geçti.
+- 68 PostgreSQL entegrasyon kontrolü geçti (gerçek ClamAV ile; 6'sı F8-05). Yeni testler gerçek bir HTTP dinleyici ve gerçek `LISTEN/NOTIFY` üzerinden SSE okur: bahsetme sınırları (grup üyesi olmayan, kayda erişimi olmayan, pasif/olmayan kişi, kendinden bahsetme); bildirim önceliği, kanal mesajının bildirim üretmemesi, yanıt dizisi alıcıları, tekrar gönderimde tek bildirim; bildirim listesinde metnin bulunmaması ve paylaşım kalkınca bildirimin düşmesi; akışta yalnız kimlik taşıyan olaylar, dışarıdakine olay gitmemesi, paylaşım iptalinden sonraki mesajın gitmemesi, tarama sonucunun bildirilmesi; çıkış ve pasifleştirmede akışın kapanması, kullanıcı başına bağlantı sınırı.
+- 4 Playwright senaryosu geçti; mesajlaşma senaryosu `@` önerisinden kişi seçmeyi ve vurguyu, yanıtın diğer açık sayfaya 5 saniyeden kısa sürede ulaşmasını (güvenlik ağı yoklaması 60 sn), menüde bildirim sayacını, bildirimin metni göstermeden konuşmaya götürmesini kapsar.
+- Bulunan ve düzeltilen sorun: Next.js geliştirme sunucusu SSE yanıtını gzip ile sıkıştırıp tamponluyordu (tarayıcıda `ready` olayı 6 sn içinde gelmedi); `no-transform` ile `ready` 12 ms'de geldi.
+- Caddy: üretim Caddyfile'ı (`encode zstd gzip` + `/api/*` → API) bu konteynerde Caddy 2.6.2 ile denendi; `text/event-stream` sıkıştırılmadan anında iletildi, Caddyfile değiştirilmedi. Üretimdeki `caddy:2-alpine` sürümüyle staging'de yeniden doğrulanmalıdır.
+- Sınır: tek API sürecinde ve yerelde doğrulandı; birden çok API kopyası için her kopya kendi `LISTEN` bağlantısını açar (tasarım gereği çalışır, burada denenmedi).
 
 ## Kabul kriterleri
 

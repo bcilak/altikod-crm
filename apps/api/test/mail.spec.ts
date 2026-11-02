@@ -128,3 +128,59 @@ test('SMTP adapter delivers invitation and reset links through a real SMTP sessi
     Object.assign(process.env, previous);
   }
 });
+
+test('managed passwords: restricted login, change, reset, revocation and admin-only access', async () => {
+  if (!process.env.TEST_DATABASE_URL || !new URL(process.env.TEST_DATABASE_URL).pathname.startsWith('/saleshub_test_')) throw new Error('Isolated database required');
+  const previous = process.env.MAIL_TRANSPORT; process.env.MAIL_TRANSPORT = 'disabled';
+  const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const app = module.createNestApplication(); configureApp(app); await app.init(); const db = app.get(PrismaService);
+  const temp = 'Temporary-test!123'; const permanent = 'Permanent-test!456'; const reset = 'Reset-test-only!789';
+  const post = (path: string, data: object, auth?: { cookie: string; csrf: string }) => {
+    const r = request(app.getHttpServer()).post(`/api/v1${path}`).set('Origin', 'http://localhost:3000');
+    if (auth) r.set('Cookie', auth.cookie).set('X-CSRF-Token', auth.csrf);
+    return r.send(data);
+  };
+  const login = async (email: string, password: string) => {
+    const r = await post('/auth/login', { email, password }).expect(201);
+    return { cookie: (r.headers['set-cookie'] as unknown as string[])[0]!.split(';')[0]!, csrf: r.body.csrfToken as string };
+  };
+  try {
+    const owner = await db.user.create({ data: { email: 'managed-admin@example.invalid', name: 'Managed Admin', role: 'ADMIN', passwordHash: await hashPassword(permanent) } });
+    const admin = await login(owner.email, permanent);
+    const input = { email: 'managed-user@example.invalid', name: 'Managed User', role: 'SALES', temporaryPassword: temp };
+    await post('/users', { ...input, temporaryPassword: 'short' }, admin).expect(400);
+    const created = await post('/users', input, admin).expect(201); const id = created.body.id;
+    assert.equal(created.body.mustChangePassword, true); assert.ok(!JSON.stringify(created.body).includes(temp)); assert.ok(!('passwordHash' in created.body));
+    await post('/users', input, admin).expect(409);
+    let user = await login(input.email, temp);
+    await request(app.getHttpServer()).get('/api/v1/companies').set('Cookie', user.cookie).expect(403);
+    const me = await request(app.getHttpServer()).get('/api/v1/auth/me').set('Cookie', user.cookie).expect(200);
+    assert.equal(me.body.mustChangePassword, true);
+    await post('/auth/password/change', { currentPassword: temp, password: permanent }, { ...user, csrf: 'wrong' }).expect(403);
+    await post('/auth/password/change', { currentPassword: 'wrong', password: permanent }, user).expect(400);
+    await post('/auth/password/change', { currentPassword: temp, password: temp }, user).expect(400);
+    await post('/auth/password/change', { currentPassword: temp, password: permanent }, user).expect(201);
+    await request(app.getHttpServer()).get('/api/v1/auth/me').set('Cookie', user.cookie).expect(401);
+    user = await login(input.email, permanent);
+    await request(app.getHttpServer()).get('/api/v1/companies').set('Cookie', user.cookie).expect(200);
+    await post('/users', { ...input, email: 'unauthorized@example.invalid' }, user).expect(403);
+    await post(`/users/${owner.id}/password`, { temporaryPassword: reset }, user).expect(403);
+    await post(`/users/${owner.id}/password`, { temporaryPassword: reset }, admin).expect(400);
+    const token = await db.authToken.create({ data: { userId: id, kind: 'RESET', tokenHash: 'managed-token-hash', expiresAt: new Date(Date.now() + 60000) } });
+    await post(`/users/${id}/password`, { temporaryPassword: reset }, admin).expect(201);
+    assert.ok((await db.authToken.findUniqueOrThrow({ where: { id: token.id } })).usedAt);
+    assert.equal(await db.pushSubscription.count({ where: { userId: id } }), 0);
+    await request(app.getHttpServer()).get('/api/v1/auth/me').set('Cookie', user.cookie).expect(401);
+    await post('/auth/login', { email: input.email, password: permanent }).expect(401);
+    user = await login(input.email, reset);
+    await request(app.getHttpServer()).get('/api/v1/companies').set('Cookie', user.cookie).expect(403);
+    await post('/auth/password/change', { currentPassword: reset, password: permanent }, user).expect(201);
+    const logs = await db.auditLog.findMany({ where: { entityId: id } });
+    assert.ok(logs.some(l => l.action === 'ADMIN_PASSWORD_RESET')); assert.ok(logs.some(l => l.action === 'USER_CREATE'));
+    for (const secret of [temp, reset, permanent]) assert.ok(!JSON.stringify(logs).includes(secret));
+  } finally {
+    // This file shares an isolated DB with later suites; do not spend their login rate-limit budget.
+    await db.rateLimit.deleteMany();
+    await app.close(); if (previous === undefined) delete process.env.MAIL_TRANSPORT; else process.env.MAIL_TRANSPORT = previous;
+  }
+});

@@ -14,9 +14,10 @@ import { forgetThisDevice, useAppShell } from '../../components/pwa';
 export default function CrmLayout({ children }: { children: React.ReactNode }) {
   const { data: me, error, isLoading } = useMe(); const router = useRouter(); const cache = useQueryClient();
   // Coming back after the session ended (e.g. from a phone notification): sign in, then continue to the same page.
-  useEffect(() => { if (me) setCsrf(me.csrfToken); if (error instanceof ApiError && error.status === 401) { cache.clear(); setCsrf(''); router.replace(`/login?next=${encodeURIComponent(location.pathname + location.search)}`); } }, [me, error, router, cache]);
+  useEffect(() => { if (me) { setCsrf(me.csrfToken); if (me.mustChangePassword) router.replace('/change-password'); } if (error instanceof ApiError && error.status === 401) { cache.clear(); setCsrf(''); router.replace(`/login?next=${encodeURIComponent(location.pathname + location.search)}`); } }, [me, error, router, cache]);
   if (isLoading) return <Loading />;
   if (!me) return <main className="p-8"><Notice error={error} /><Link href="/login">Giriş yap</Link></main>;
+  if (me.mustChangePassword) return <Loading />;
   return <LiveProvider><WorkingDrafts key={me.id}><Shell me={me}>{children}</Shell></WorkingDrafts></LiveProvider>;
 }
 const count = (n: number) => n > 99 ? '99+' : String(n);

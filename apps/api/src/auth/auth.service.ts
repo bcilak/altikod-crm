@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, ConflictException, Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma.service';
@@ -9,7 +9,7 @@ import { parseEnv } from '../env';
 import { Role } from '../generated/prisma/client';
 
 export const hashPassword = (value: string) => argon2.hash(value, { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 });
-const publicUser = { id: true, name: true, email: true, role: true, isActive: true, createdAt: true } as const;
+const publicUser = { id: true, name: true, email: true, role: true, isActive: true, createdAt: true, mustChangePassword: true } as const;
 
 @Injectable()
 export class AuthService {
@@ -31,7 +31,7 @@ export class AuthService {
       await db.session.create({ data: { userId: user.id, tokenHash: digest(token), csrfToken, expiresAt: new Date(Date.now() + 8 * 3600_000) } });
       await audit(db, user.id, 'LOGIN', 'auth');
     });
-    return { token, csrfToken, user: { id: user.id, name: user.name, email: user.email, role: user.role } };
+    return { token, csrfToken, user: { id: user.id, name: user.name, email: user.email, role: user.role, mustChangePassword: user.mustChangePassword } };
   }
   async logout(actor: Actor) {
     await this.prisma.$transaction(async db => {
@@ -39,6 +39,55 @@ export class AuthService {
       // Signing out of a device also stops its phone notifications.
       await db.pushSubscription.deleteMany({ where: { sessionId: actor.sessionId } });
       await audit(db, actor.id, 'LOGOUT', 'auth');
+    });
+    return { ok: true };
+  }
+  async createUser(actor: Actor, input: { email: string; name: string; role: Role; temporaryPassword: string }) {
+    if (actor.role !== 'ADMIN') throw new ForbiddenException('Yalnız yönetici kullanıcı oluşturabilir');
+    const passwordHash = await hashPassword(input.temporaryPassword);
+    try {
+      return await this.prisma.$transaction(async db => {
+        const user = await db.user.create({ data: { email: input.email, name: input.name, role: input.role, passwordHash, mustChangePassword: true }, select: publicUser });
+        await audit(db, actor.id, 'USER_CREATE', 'user', user.id, { role: user.role });
+        return user;
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code === 'P2002') throw new ConflictException('Bu e-posta zaten kayıtlı');
+      throw error;
+    }
+  }
+  async resetPassword(actor: Actor, id: string, temporaryPassword: string) {
+    if (actor.role !== 'ADMIN') throw new ForbiddenException('Yalnız yönetici parola sıfırlayabilir');
+    if (actor.id === id) throw new BadRequestException('Kendi parolanız için parola değiştirme ekranını kullanın');
+    const passwordHash = await hashPassword(temporaryPassword);
+    await this.prisma.$transaction(async db => {
+      await db.$queryRaw`SELECT id FROM "User" WHERE id = ${id}::uuid FOR UPDATE`;
+      const user = await db.user.findUnique({ where: { id } });
+      if (!user) throw new BadRequestException('Kullanıcı bulunamadı');
+      if (!user.isActive) throw new BadRequestException('Önce hesabı etkinleştirin');
+      if (user.passwordHash && await argon2.verify(user.passwordHash, temporaryPassword)) throw new BadRequestException('Farklı bir geçici parola belirleyin');
+      await db.user.update({ where: { id }, data: { passwordHash, mustChangePassword: true } });
+      await db.session.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+      await db.authToken.updateMany({ where: { userId: id, usedAt: null }, data: { usedAt: new Date() } });
+      await db.pushSubscription.deleteMany({ where: { userId: id } });
+      await audit(db, actor.id, 'ADMIN_PASSWORD_RESET', 'user', id);
+    });
+    return { ok: true };
+  }
+  async changePassword(actor: Actor, input: { currentPassword: string; password: string }) {
+    if (input.currentPassword === input.password) throw new BadRequestException('Yeni parola mevcut paroladan farklı olmalı');
+    const passwordHash = await hashPassword(input.password);
+    await this.prisma.$transaction(async db => {
+      await db.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.id}::uuid FOR UPDATE`;
+      const user = await db.user.findUniqueOrThrow({ where: { id: actor.id } });
+      const session = await db.session.findUnique({ where: { id: actor.sessionId } });
+      if (!user.isActive || !session || session.revokedAt || session.expiresAt <= new Date()) throw new UnauthorizedException('Oturum sona erdi');
+      if (!user.passwordHash || !await argon2.verify(user.passwordHash, input.currentPassword)) throw new BadRequestException('Mevcut parola hatalı');
+      await db.user.update({ where: { id: actor.id }, data: { passwordHash, mustChangePassword: false } });
+      await db.session.updateMany({ where: { userId: actor.id, revokedAt: null }, data: { revokedAt: new Date() } });
+      await db.authToken.updateMany({ where: { userId: actor.id, usedAt: null }, data: { usedAt: new Date() } });
+      await db.pushSubscription.deleteMany({ where: { userId: actor.id } });
+      await audit(db, actor.id, 'PASSWORD_CHANGE', 'user', actor.id);
     });
     return { ok: true };
   }
@@ -82,9 +131,10 @@ export class AuthService {
     await this.prisma.$transaction(async db => {
       const token = await db.authToken.findUnique({ where: { tokenHash: digest(raw) }, include: { user: true } });
       if (!token || token.kind !== kind || token.usedAt || token.expiresAt <= new Date() || !token.user.isActive) throw new BadRequestException('Bağlantı geçersiz veya süresi dolmuş');
+      await db.$queryRaw`SELECT id FROM "User" WHERE id = ${token.userId}::uuid FOR UPDATE`;
       const claim = await db.authToken.updateMany({ where: { id: token.id, usedAt: null }, data: { usedAt: new Date() } });
       if (claim.count !== 1) throw new ConflictException('Bağlantı zaten kullanılmış');
-      await db.user.update({ where: { id: token.userId }, data: { passwordHash: hash } });
+      await db.user.update({ where: { id: token.userId }, data: { passwordHash: hash, mustChangePassword: false } });
       await db.session.updateMany({ where: { userId: token.userId, revokedAt: null }, data: { revokedAt: new Date() } });
       await db.pushSubscription.deleteMany({ where: { userId: token.userId } });
       await db.authToken.updateMany({ where: { userId: token.userId, usedAt: null }, data: { usedAt: new Date() } });

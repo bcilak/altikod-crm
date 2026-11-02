@@ -45,6 +45,7 @@ model User {
   email        String   @unique
   name         String
   passwordHash String?
+  mustChangePassword Boolean @default(false)
   role         Role     @default(SALES)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now()) @db.Timestamptz(6)

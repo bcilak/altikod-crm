@@ -6,7 +6,8 @@ import { PrismaService } from '../prisma.service';
 import { parseEnv } from '../env';
 import type { Role } from '../generated/prisma/client';
 
-export type Actor = { id: string; role: Role; name: string; email: string; sessionId: string; csrfToken: string };
+export type Actor = { id: string; role: Role; name: string; email: string; sessionId: string; csrfToken: string; mustChangePassword?: boolean };
+export const PasswordChangeAllowed = () => SetMetadata('passwordChangeAllowed', true);
 export type AuthRequest = Request & { actor: Actor };
 export const Public = () => SetMetadata('public', true);
 export const Access = (resource: string, action: string) => SetMetadata('access', { resource, action });
@@ -35,7 +36,8 @@ export class AccessGuard implements CanActivate {
     if (!token || !/^[a-f0-9]{64}$/.test(token)) throw new UnauthorizedException('Oturum gerekli');
     const session = await this.prisma.session.findUnique({ where: { tokenHash: digest(token) }, include: { user: true } });
     if (!session || session.revokedAt || session.expiresAt <= new Date() || !session.user.isActive) throw new UnauthorizedException('Oturum sona erdi');
-    req.actor = { id: session.user.id, role: session.user.role, name: session.user.name, email: session.user.email, sessionId: session.id, csrfToken: session.csrfToken };
+    req.actor = { id: session.user.id, role: session.user.role, name: session.user.name, email: session.user.email, sessionId: session.id, csrfToken: session.csrfToken, mustChangePassword: session.user.mustChangePassword };
+    if (session.user.mustChangePassword && !this.reflector.get<boolean>('passwordChangeAllowed', context.getHandler())) throw new ForbiddenException('Devam etmek için parolanızı değiştirin');
     if (mutation && !safeEqual(String(req.headers['x-csrf-token'] ?? ''), session.csrfToken)) throw new ForbiddenException('Geçersiz CSRF doğrulaması');
     const permission = this.reflector.getAllAndOverride<{ resource: string; action: string }>('access', [context.getHandler(), context.getClass()]);
     if (!permission || !await this.prisma.rolePermission.findUnique({ where: { role_resource_action: { role: req.actor.role, ...permission } } })) {

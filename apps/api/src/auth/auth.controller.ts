@@ -2,9 +2,9 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Req, Res } fr
 import { ApiTags, ApiServiceUnavailableResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { email, inviteSchema, loginSchema, tokenPasswordSchema, userPatchSchema } from '@saleshub/shared';
+import { email, inviteSchema, loginSchema, tokenPasswordSchema, userPatchSchema, createUserSchema, adminPasswordSchema, changePasswordSchema } from '@saleshub/shared';
 import { AuthService } from './auth.service';
-import { Access, Public, type AuthRequest } from '../security/access';
+import { Access, Public, PasswordChangeAllowed, type AuthRequest } from '../security/access';
 import { ZodValidationPipe, ValidatedBody as Input } from '../validation.pipe';
 
 @ApiTags('auth')
@@ -17,14 +17,18 @@ export class AuthController {
     res.cookie('saleshub_session', result.token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 8 * 3600_000 });
     return { user: result.user, csrfToken: result.csrfToken };
   }
+  @PasswordChangeAllowed()
   @Access('session', 'read') @Get('me')
-  me(@Req() req: AuthRequest) { const { id, role, name, email, csrfToken } = req.actor; return { id, role, name, email, csrfToken }; }
+  me(@Req() req: AuthRequest) { const { id, role, name, email, csrfToken, mustChangePassword } = req.actor; return { id, role, name, email, csrfToken, mustChangePassword }; }
+  @PasswordChangeAllowed()
   @Access('session', 'write') @Post('logout')
   async logout(@Req() req: AuthRequest, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.logout(req.actor);
     res.clearCookie('saleshub_session', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     return result;
   }
+  @PasswordChangeAllowed() @Access('session', 'write') @Post('password/change')
+  changePassword(@Req() req: AuthRequest, @Input(changePasswordSchema) input: z.infer<typeof changePasswordSchema>) { return this.auth.changePassword(req.actor, input); }
   @Public() @Post('password-reset/request')
   @ApiServiceUnavailableResponse({ description: 'E-posta kapalıysa tüm hesaplar için 503; token oluşturulmaz.' })
   reset(@Body(new ZodValidationPipe(z.object({ email }).strict())) input: { email: string }) { return this.auth.requestReset(input.email); }
@@ -38,6 +42,8 @@ export class AuthController {
 @Controller('users')
 export class UsersController {
   constructor(private readonly auth: AuthService) {}
+  @Post() create(@Req() req: AuthRequest, @Input(createUserSchema) input: z.infer<typeof createUserSchema>) { return this.auth.createUser(req.actor, input); }
+  @Post(':id/password') resetPassword(@Req() req: AuthRequest, @Param('id', ParseUUIDPipe) id: string, @Input(adminPasswordSchema) input: z.infer<typeof adminPasswordSchema>) { return this.auth.resetPassword(req.actor, id, input.temporaryPassword); }
   @Get() list() { return this.auth.users(); }
   @ApiServiceUnavailableResponse({ description: 'E-posta kapalı veya gönderilemedi. Kapalı modda kullanıcı/token oluşturulmaz.' })
   @Post('invitations') invite(@Req() req: AuthRequest, @Input(inviteSchema) input: z.infer<typeof inviteSchema>) { return this.auth.invite(req.actor, input); }

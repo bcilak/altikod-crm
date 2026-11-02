@@ -2,6 +2,8 @@
 
 ## Güncel plan — 2 Kasım 2026
 
+İlk sunucu kurulumu kararı: boş veritabanı ve e-posta kapalı mod; mevcut Apache/Virtualmin kullanılacak. [Kurulum ve kabul koşulları](apache-deployment.md). SMTP ve tam ekip pilotu sonraki iş olarak açık kalır.
+
 Faz 0–6'nın yazılımı, Faz 8 mesajlaşma ve Faz 9 PWA/Web Push uygulandı. Faz 5'in gerçek pilot/canlı kabulü, F8-07 ekip pilotu ve Faz 9 gerçek cihaz kabulü açık. Faz 7 ürün sahibi kararıyla kapsam dışı kalır. Aşağıdaki tarihsel faz kayıtları yazılım teslimatını anlatır; canlıya hazır olma onayı değildir.
 
 Mobil kullanım iyileştirmeleri de tamamlandı: alt gezinme, görev başlat/tamamla, hızlı toplantı notu, sayfalar arasında bellekte taslak koruma ve telefon mesaj yazma düzeni. Kabul kaydı: [mobil iş akışları](mobile-workflows.md). Taslaklar yeniden yükleme/oturum kapanmasında korunmaz; çevrimdışı çalışma uygulanmış değildir. iPhone/Android için mevcut teslimat PWA'dır, mağazadan indirilen native uygulama değildir.

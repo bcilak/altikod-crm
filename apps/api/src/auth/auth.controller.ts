@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Req, Res } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiServiceUnavailableResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { email, inviteSchema, loginSchema, tokenPasswordSchema, userPatchSchema } from '@saleshub/shared';
@@ -26,6 +26,7 @@ export class AuthController {
     return result;
   }
   @Public() @Post('password-reset/request')
+  @ApiServiceUnavailableResponse({ description: 'E-posta kapalıysa tüm hesaplar için 503; token oluşturulmaz.' })
   reset(@Body(new ZodValidationPipe(z.object({ email }).strict())) input: { email: string }) { return this.auth.requestReset(input.email); }
   @Public() @Post('password-reset/confirm')
   confirm(@Input(tokenPasswordSchema) input: z.infer<typeof tokenPasswordSchema>) { return this.auth.consume(input.token, input.password, 'RESET'); }
@@ -38,6 +39,7 @@ export class AuthController {
 export class UsersController {
   constructor(private readonly auth: AuthService) {}
   @Get() list() { return this.auth.users(); }
+  @ApiServiceUnavailableResponse({ description: 'E-posta kapalı veya gönderilemedi. Kapalı modda kullanıcı/token oluşturulmaz.' })
   @Post('invitations') invite(@Req() req: AuthRequest, @Input(inviteSchema) input: z.infer<typeof inviteSchema>) { return this.auth.invite(req.actor, input); }
   @Patch(':id') update(@Req() req: AuthRequest, @Param('id', ParseUUIDPipe) id: string, @Input(userPatchSchema) input: z.infer<typeof userPatchSchema>) { return this.auth.updateUser(req.actor, id, input); }
 }

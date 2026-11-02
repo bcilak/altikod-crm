@@ -20,6 +20,7 @@ const rejects = (env: NodeJS.ProcessEnv, field: string) => assert.throws(() => p
 
 test('production mail configuration is validated without leaking secrets', () => {
   rejects({ ...base }, 'MAIL_TRANSPORT');
+  assert.equal(parseEnv({ ...base, MAIL_TRANSPORT: 'disabled' }).MAIL_TRANSPORT, 'disabled');
   rejects({ ...base, ...smtp, SMTP_HOST: undefined }, 'SMTP_HOST');
   rejects({ ...base, ...smtp, MAIL_FROM: undefined }, 'MAIL_FROM');
   rejects({ ...base, ...smtp, SMTP_USER: undefined }, 'SMTP_PASSWORD');
@@ -31,6 +32,35 @@ test('production mail configuration is validated without leaking secrets', () =>
   assert.equal(parseEnv({ NODE_ENV: 'development', DATABASE_URL: base.DATABASE_URL }).MAIL_TRANSPORT, 'local');
   const html = authMail('INVITE', 'https://crm.example.invalid/accept-invite#token="><script>').html;
   assert.ok(!html.includes('"><script>') && html.includes('&quot;&gt;&lt;script&gt;'));
+});
+
+test('disabled mail rejects requests before creating users or tokens without disclosing accounts', async () => {
+  if (!process.env.TEST_DATABASE_URL || !new URL(process.env.TEST_DATABASE_URL).pathname.startsWith('/saleshub_test_')) throw new Error('Isolated database required');
+  const previous = process.env.MAIL_TRANSPORT;
+  process.env.MAIL_TRANSPORT = 'disabled';
+  const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const app = module.createNestApplication(); configureApp(app); await app.init();
+  const db = app.get(PrismaService);
+  try {
+    const password = 'Test-only-password!42';
+    await db.user.create({ data: { name: 'No Mail Admin', email: 'no-mail-admin@example.invalid', role: 'ADMIN', passwordHash: await hashPassword(password) } });
+    const post = (path: string, body: object) => request(app.getHttpServer()).post(`/api/v1${path}`).set('Origin', 'http://localhost:3000').send(body);
+    const login = await post('/auth/login', { email: 'no-mail-admin@example.invalid', password }).expect(201);
+    const tokens = await db.authToken.count();
+    const users = await db.user.count();
+    const existing = await post('/auth/password-reset/request', { email: 'no-mail-admin@example.invalid' }).expect(503);
+    const missing = await post('/auth/password-reset/request', { email: 'missing-no-mail@example.invalid' }).expect(503);
+    assert.equal(existing.body.error.message, missing.body.error.message);
+    assert.match(existing.body.error.message, /kapalı/);
+    await request(app.getHttpServer()).post('/api/v1/users/invitations')
+      .set('Origin', 'http://localhost:3000').set('Cookie', (login.headers['set-cookie'] as unknown as string[])[0]!.split(';')[0]!)
+      .set('X-CSRF-Token', login.body.csrfToken).send({ email: 'no-mail-invite@example.invalid', name: 'No Mail', role: 'SALES' }).expect(503);
+    assert.equal(await db.authToken.count(), tokens);
+    assert.equal(await db.user.count(), users);
+  } finally {
+    await app.close();
+    if (previous === undefined) delete process.env.MAIL_TRANSPORT; else process.env.MAIL_TRANSPORT = previous;
+  }
 });
 
 test('SMTP adapter delivers invitation and reset links through a real SMTP session', async t => {

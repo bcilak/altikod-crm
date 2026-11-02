@@ -43,6 +43,7 @@ export class AuthService {
     return { ok: true };
   }
   async invite(actor: Actor, input: { email: string; name: string; role: Role }) {
+    this.requireMail();
     const raw = randomBytes(32).toString('hex');
     const user = await this.prisma.$transaction(async db => {
       const existing = await db.user.findUnique({ where: { email: input.email } });
@@ -58,6 +59,7 @@ export class AuthService {
     return { ...user, delivery: this.mail.delivery };
   }
   async requestReset(email: string) {
+    this.requireMail();
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (user?.isActive && user.passwordHash) {
       const raw = randomBytes(32).toString('hex');
@@ -71,6 +73,9 @@ export class AuthService {
       catch { console.error(JSON.stringify({ event: 'mail_delivery_failed', kind: 'RESET' })); }
     }
     return { message: 'Hesap uygunsa parola sıfırlama bağlantısı hazırlanmıştır.' };
+  }
+  private requireMail() {
+    if (this.mail.delivery === 'DISABLED') throw new ServiceUnavailableException('E-posta gönderimi şu anda kapalı. Yöneticiyle iletişime geçin.');
   }
   async consume(raw: string, password: string, kind: string) {
     const hash = await hashPassword(password);

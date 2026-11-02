@@ -34,6 +34,8 @@ Olay kurtarmasında yazıları bakım moduyla durdurun, mevcut durumu ayrıca ye
 
 ### E-posta (SMTP)
 
+İlk canlı görüntüleme için kullanıcı kararıyla `MAIL_TRANSPORT=disabled` desteklenir. Bu açık seçimde davet ve parola sıfırlama 503 döner, kullanıcı/token oluşturulmaz. Aşağıdaki SMTP zorunlulukları e-posta açıkken geçerlidir; `local` adaptörü production'da hâlâ reddedilir. Apache kurulum yolu: `docs/apache-deployment.md`.
+
 Production'da `MAIL_TRANSPORT=smtp` zorunludur; API eksik veya şifresiz SMTP ayarıyla başlamaz (hata yalnız alan adlarını gösterir, değerleri göstermez). Gerekenler: `SMTP_HOST`, `SMTP_PORT` (varsayılan 587), `SMTP_SECURITY` (`starttls` varsayılan, `tls` 465 için), isteğe bağlı `SMTP_USER`/`SMTP_PASSWORD` (birlikte), `MAIL_FROM` (ör. `Altıkod CRM <crm@altikod.com>`). Sağlayıcıdan bağımsızdır (Google Workspace, Microsoft 365, Yandex, kurumsal relay vb.). Gönderen alan adı için SPF, DKIM ve DMARC kayıtları sağlayıcının rehberine göre yapılmalıdır; bu kayıtlar ve gerçek teslim yerelde doğrulanmadı. URL tek kullanımlık token taşıdığından e-posta içeriği loglanmaz; başarısız sıfırlama gönderimi yalnız `mail_delivery_failed` olayı olarak loglanır.
 
 ### Canlı mesajlaşma akışı (SSE)

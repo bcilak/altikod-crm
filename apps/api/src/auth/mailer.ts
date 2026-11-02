@@ -8,7 +8,7 @@ import { parseEnv } from '../env';
 export type MailKind = 'INVITE' | 'RESET';
 /** Delivery port for auth links. Implementations must never log the URL: it carries a single-use token. */
 export abstract class Mailer {
-  abstract readonly delivery: 'LOCAL_FILE' | 'SMTP';
+  abstract readonly delivery: 'LOCAL_FILE' | 'SMTP' | 'DISABLED';
   abstract send(email: string, kind: MailKind, url: string): Promise<void>;
 }
 
@@ -37,6 +37,11 @@ export class LocalMail extends Mailer {
   }
 }
 
+export class DisabledMail extends Mailer {
+  readonly delivery = 'DISABLED';
+  async send() { throw new ServiceUnavailableException('E-posta gönderimi şu anda kapalı. Yöneticiyle iletişime geçin.'); }
+}
+
 export class SmtpMail extends Mailer {
   readonly delivery = 'SMTP';
   constructor(private readonly from: string, private readonly transport: Transporter) { super(); }
@@ -46,6 +51,7 @@ export class SmtpMail extends Mailer {
 }
 
 export function createMailer(): Mailer {
+  if (process.env.MAIL_TRANSPORT === 'disabled') return new DisabledMail();
   // main.ts validates the whole environment at startup; only SMTP needs parsed settings here.
   if ((process.env.MAIL_TRANSPORT ?? 'local') === 'local') return new LocalMail();
   const env = parseEnv(process.env);

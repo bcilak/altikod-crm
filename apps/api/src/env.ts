@@ -8,7 +8,7 @@ const schema = z.object({
   HOST: z.enum(['127.0.0.1', '0.0.0.0']).default('127.0.0.1'),
   APP_ORIGIN: z.string().url().refine(value => new URL(value).origin === value, 'Use an origin without a trailing path').default('http://localhost:3000'),
   DATABASE_URL: z.string().url().refine(value => /^postgres(ql)?:\/\//.test(value)),
-  MAIL_TRANSPORT: z.enum(['local', 'smtp']).default('local'),
+  MAIL_TRANSPORT: z.enum(['local', 'smtp', 'disabled']).default('local'),
   SMTP_HOST: optional(z.string().min(1)),
   SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
   SMTP_SECURITY: z.enum(['starttls', 'tls', 'none']).default('starttls'),
@@ -28,7 +28,7 @@ const schema = z.object({
   MESSAGE_RETENTION_DAYS: z.coerce.number().int().min(30).max(3650).default(730),
 }).superRefine((value, ctx) => {
   if (value.NODE_ENV === 'production' && !value.APP_ORIGIN.startsWith('https://')) ctx.addIssue({ code: 'custom', path: ['APP_ORIGIN'], message: 'Production requires HTTPS' });
-  if (value.NODE_ENV === 'production' && value.MAIL_TRANSPORT !== 'smtp') ctx.addIssue({ code: 'custom', path: ['MAIL_TRANSPORT'], message: 'Production requires SMTP delivery' });
+  if (value.NODE_ENV === 'production' && value.MAIL_TRANSPORT === 'local') ctx.addIssue({ code: 'custom', path: ['MAIL_TRANSPORT'], message: 'Production requires SMTP or explicitly disabled mail' });
   if (value.NODE_ENV === 'production' && value.MALWARE_SCANNER !== 'clamd') ctx.addIssue({ code: 'custom', path: ['MALWARE_SCANNER'], message: 'Production requires malware scanning of shared files' });
   const push = [value.WEB_PUSH_PUBLIC_KEY, value.WEB_PUSH_PRIVATE_KEY, value.WEB_PUSH_SUBJECT];
   if (push.some(Boolean) && !push.every(Boolean)) ctx.addIssue({ code: 'custom', path: ['WEB_PUSH_PRIVATE_KEY'], message: 'Web Push keys and subject go together' });

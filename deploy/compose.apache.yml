@@ -1,0 +1,83 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: saleshub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a strong database password}
+      POSTGRES_DB: saleshub
+    volumes: ["database:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saleshub -d saleshub"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  clamav:
+    # Scans every file shared in messages before it can be downloaded (F8-04). Needs ~1.5-2 GB RAM; first start downloads signatures.
+    image: clamav/clamav:1.4
+    restart: unless-stopped
+    volumes: ["clamav-db:/var/lib/clamav"]
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+  migrate:
+    image: ${CRM_IMAGE:?Set CRM_IMAGE}
+    # Owner role applies migrations, then (re)grants the least-privileged runtime role used by the API.
+    command: ["sh", "-c", "npm run db:migrate && node scripts/db-grants.mjs"]
+    environment:
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:?Set owner database URL using postgres as hostname}
+      APP_DB_USER: ${APP_DB_USER:?Set runtime database user}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set runtime database password}
+    depends_on:
+      postgres: { condition: service_healthy }
+  api:
+    ports: ["127.0.0.1:18085:3001"]
+    image: ${CRM_IMAGE:?Set CRM_IMAGE}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set runtime role URL (APP_DB_USER) using postgres as hostname}
+      APP_ORIGIN: https://${DOMAIN:?Set domain}
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-disabled}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MALWARE_SCANNER: clamd
+      CLAMD_HOST: clamav
+      CLAMD_PORT: "3310"
+      # Phone notifications (Faz 9): generate once with `npm run push:keys` and keep in the secret store.
+      # The API must reach the push services over HTTPS (web.push.apple.com, *.push.apple.com, fcm.googleapis.com, updates.push.services.mozilla.com, *.notify.windows.com).
+      WEB_PUSH_PUBLIC_KEY: ${WEB_PUSH_PUBLIC_KEY:?Set Web Push public key (npm run push:keys)}
+      WEB_PUSH_PRIVATE_KEY: ${WEB_PUSH_PRIVATE_KEY:?Set Web Push private key}
+      WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:?Set contact, e.g. mailto:it@altikod.com}
+      HOST: 0.0.0.0
+      PRIVATE_FILES_DIR: /app/.private-files
+    volumes: ["private-files:/app/.private-files"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      clamav: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/v1/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  web:
+    ports: ["127.0.0.1:18084:3000"]
+    image: ${CRM_IMAGE:?Set CRM_IMAGE}
+    command: ["node", "node_modules/next/dist/bin/next", "start", "apps/web", "--hostname", "0.0.0.0", "--port", "3000"]
+    environment:
+      NODE_ENV: production
+      API_INTERNAL_URL: http://api:3001
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+volumes:
+  database:
+  clamav-db:
+  private-files:

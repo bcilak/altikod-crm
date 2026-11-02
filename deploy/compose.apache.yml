@@ -13,8 +13,9 @@ services:
       timeout: 3s
       retries: 20
   clamav:
-    # Scans every file shared in messages before it can be downloaded (F8-04). Needs ~1.5-2 GB RAM; first start downloads signatures.
-    image: clamav/clamav:1.4
+    # Official Debian image supports ARM64 and AMD64. Allow 4 GiB RAM for signature reloads.
+    # Base image downloads signatures on first start; keep clamav-db across restarts.
+    image: clamav/clamav:1.5.4_base-debian13-slim
     restart: unless-stopped
     volumes: ["clamav-db:/var/lib/clamav"]
     healthcheck:

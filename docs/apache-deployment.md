@@ -1,5 +1,7 @@
 # Apache üzerinde ilk kurulum
 
+ARM64 sunucu için ClamAV resmi `1.5.4_base-debian13-slim` imajı kullanılır; registry manifestinde ARM64 ve AMD64 doğrulandı. İmzalar ilk açılışta indirilir ve `clamav-db` volume'ünde kalır. İmza yenileme sırasında bellek ihtiyacı artar; ClamAV için 4 GiB pay planlayın. Manifest kontrolü sunucuda sağlık/tarama testinin yerini almaz.
+
 2 Kasım 2026: Kullanıcı boş veritabanıyla ilk canlı görüntülemeyi ve e-postayı şimdilik atlamayı seçti. Bu, pilot/yedek/cihaz kabulünün tamamlandığı anlamına gelmez.
 
 `deploy/compose.apache.yml` bağımsız Compose dosyasıdır; production dosyasıyla birleştirilmez. `-p altikod-crm` ayrı ağ ve volume isimleri sağlar. API yalnız 127.0.0.1:18085, web yalnız 127.0.0.1:18084 üzerinde yayınlanır; PostgreSQL ve ClamAV host portu açmaz. Caddy içermez. İmaj `CRM_IMAGE` ile seçilir; önceden build edilmelidir.

@@ -7,7 +7,9 @@ COPY packages/shared/package.json packages/shared/package.json
 RUN npm ci
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/* && npm run db:generate && npm run build
+# Git checkouts made under umask 077 may contain root-only source files.
+# Normalize image code permissions before copying into the non-root runtime.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/* && npm run db:generate && npm run build && chmod -R a+rX /app
 
 FROM node:24-bookworm-slim AS runtime
 WORKDIR /app

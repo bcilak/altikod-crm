@@ -1,5 +1,7 @@
 # Apache üzerinde ilk kurulum
 
+Sunucudaki root kabuğunda yedek için `umask 077` kullanıldıysa Git işlemlerinden önce `umask 022` ile normal dosya oluşturma maskesine dönün; mevcut sır dosyalarının izinleri değişmez. Dockerfile build aşamasında kod dosyalarına okuma/dizin geçiş izni verir; runtime yine root olmayan kullanıcıdır. Sırlar build context'ine alınmaz. Migration öncesi `docker run --rm --network none <imaj> node -e "require('fs').readFileSync('/app/apps/api/prisma/schema.prisma'); console.log('Schema readable')"` ile şema erişimi kontrol edilebilir.
+
 ARM64 sunucu için ClamAV resmi `1.5.4_base-debian13-slim` imajı kullanılır; registry manifestinde ARM64 ve AMD64 doğrulandı. İmzalar ilk açılışta indirilir ve `clamav-db` volume'ünde kalır. İmza yenileme sırasında bellek ihtiyacı artar; ClamAV için 4 GiB pay planlayın. Manifest kontrolü sunucuda sağlık/tarama testinin yerini almaz.
 
 2 Kasım 2026: Kullanıcı boş veritabanıyla ilk canlı görüntülemeyi ve e-postayı şimdilik atlamayı seçti. Bu, pilot/yedek/cihaz kabulünün tamamlandığı anlamına gelmez.

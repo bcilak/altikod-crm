@@ -28,7 +28,7 @@ Prefix `/api/v1`; JSON; zaman ISO-8601 UTC; UUID; para decimal string; paginatio
 | Faz | Endpoint grubu | Temel komutlar |
 |---|---|---|
 | 1 | `/auth`, `/users`, `/companies`, `/contacts` | login/logout/me; invite/reset; firma/kişi CRUD, archive, paylaşım |
-| 2 | `/activities`, `/tasks`, `/meetings`, `/notifications` | oluştur/güncelle, timeline, görev tamamla, okundu |
+| 2 | `/activities`, `/tasks`, `/meetings`, `/notifications` | oluştur/güncelle, timeline, görev tamamla, okundu; `POST /meetings/:id/notes` (madde ekle), `POST /notifications/read-all` |
 | 3 | `/opportunities` | CRUD, `/:id/stage-transitions` |
 | 4 | `/products`, `/quotes`, `/quote-versions` | sürüm, request-approval, approve, withdraw, send, accept, reject, pdf |
 | 5 | `/reports`, `/imports`, `/exports`, `/handoffs`, `/audit-logs` | filtreli rapor, CSV önizleme/onay, devir oluştur |

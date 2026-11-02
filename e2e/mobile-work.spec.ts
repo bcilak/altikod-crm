@@ -22,19 +22,36 @@ test('phone: start work, keep and save meeting notes, compose multiline messages
   await nav.getByRole('link', { name: 'Takvim', exact: true }).tap();
   const meeting = page.locator('article.panel').filter({ has: page.getByRole('heading', { name: 'Mobil müşteri görüşmesi' }) });
   const notes = meeting.locator('.quick-notes'); await notes.locator('summary').tap();
-  await notes.getByLabel('Toplantı notları', { exact: true }).fill('Müşteri saha kurulumunu görüştü.\nİkinci lokasyon incelenecek.');
-  await notes.getByLabel('Kararlar ve sonraki adım').fill('Teknik ekip cuma keşif yapacak.');
-  // Client-side navigation preserves unsaved work without localStorage/sessionStorage.
+  // Chat-like note taking: Enter or "Ekle" sends one item, the field clears and stays focused for the next one.
+  const item = notes.getByLabel('Yeni madde: Görüşülen konular', { exact: true });
+  await item.fill('Müşteri saha kurulumunu görüştü.'); await item.press('Enter');
+  await expect(item).toHaveValue(''); await expect(item).toBeFocused(); await expect(notes.getByRole('status')).toHaveText('Konu eklendi.');
+  await item.fill('İkinci lokasyon incelenecek.'); await notes.getByRole('button', { name: 'Ekle', exact: true }).tap(); await expect(item).toHaveValue('');
+  await expect(notes.getByRole('region', { name: 'Görüşülen konular' }).getByRole('listitem')).toHaveCount(2);
+  await notes.getByRole('button', { name: /^Karar \/ yapılacak/ }).tap();
+  const decision = notes.getByLabel('Yeni madde: Kararlar ve yapılacaklar', { exact: true });
+  await decision.fill('Teknik ekip cuma keşif yapacak.');
+  // Client-side navigation preserves an unsent item without localStorage/sessionStorage.
   await nav.getByRole('link', { name: 'İşler', exact: true }).tap(); await expect(page).toHaveURL(/tasks/); await nav.getByRole('link', { name: 'Takvim', exact: true }).tap(); await expect(page).toHaveURL(/calendar/);
-  if (await notes.getAttribute('open') === null) await notes.locator('summary').tap(); await expect(notes.getByLabel('Toplantı notları', { exact: true })).toHaveValue(/İkinci lokasyon/);
-  await notes.getByRole('button', { name: 'Notları kaydet' }).tap(); await expect(notes.getByRole('status')).toHaveText('Notlar kaydedildi.');
-  await page.reload(); await meeting.locator('.quick-notes summary').tap(); await expect(notes.getByLabel('Toplantı notları', { exact: true })).toHaveValue(/İkinci lokasyon/);
+  if (await notes.getAttribute('open') === null) await notes.locator('summary').tap(); await expect(decision).toHaveValue('Teknik ekip cuma keşif yapacak.');
+  await decision.press('Enter'); await expect(notes.getByRole('status')).toHaveText('Karar / yapılacak eklendi.');
+  // Correcting an earlier item is an explicit edit mode over the saved text.
+  await notes.getByRole('button', { name: 'Önceki maddeleri düzenle' }).tap();
+  const all = notes.getByLabel('Toplantı notları', { exact: true });
+  await expect(all).toHaveValue('- Müşteri saha kurulumunu görüştü.\n- İkinci lokasyon incelenecek.');
+  await all.fill('- Müşteri saha kurulumunu görüştü.\n- İkinci lokasyon perşembe incelenecek.');
+  await notes.getByRole('button', { name: 'Düzeltmeleri kaydet' }).tap(); await expect(notes.getByRole('status')).toHaveText('Düzeltmeler kaydedildi.');
+  await page.reload(); await meeting.locator('.quick-notes summary').tap();
+  await expect(notes.getByRole('region', { name: 'Görüşülen konular' })).toContainText('İkinci lokasyon perşembe incelenecek.');
   await page.screenshot({ path: 'test-results/mobile-meeting-notes.png', fullPage: true });
   await meeting.getByRole('link', { name: 'Notları oku', exact: true }).tap();
   await expect(page).toHaveURL(/meetings\//);
-  await expect(page.getByRole('heading', { name: 'Not kayıt bilgileri' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Görüşülen konular' }).getByRole('listitem')).toHaveCount(2);
+  await page.locator('.note-record-details summary').tap();
   await expect(page.locator('.meeting-note-meta')).toContainText(me.name);
-  await expect(page.locator('.meeting-reader')).toContainText('İkinci lokasyon incelenecek.');
+  await page.locator('.note-record-details summary').tap();
+  await expect(page.locator('.meeting-reader')).toContainText('İkinci lokasyon perşembe incelenecek.');
+  await expect(page.getByRole('region', { name: 'Kararlar ve yapılacaklar' }).getByRole('listitem')).toHaveCount(1);
   await expect(page.getByLabel('Toplantı notları', { exact: true })).not.toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await page.screenshot({ path: 'test-results/mobile-meeting-reader.png', fullPage: true });

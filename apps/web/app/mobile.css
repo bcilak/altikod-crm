@@ -28,3 +28,36 @@
 .meeting-reader h2 { margin-top: 1.5rem; }
 .meeting-reader p { line-height: 1.8; }
 .meeting-note-meta { margin: 1rem 0; font-size: .9rem; overflow-wrap: anywhere; }
+.note-section-heading, .note-input-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.meeting-reader .note-section-heading h2 { margin: 0; }
+.meeting-note-section { margin-top: 28px; }
+.meeting-note-list { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 10px; }
+.meeting-note-list li { display: flex; align-items: flex-start; gap: 14px; padding: 16px; background: #faf7f4; border: 1px solid #e8dfda; border-radius: 12px; }
+.meeting-note-list li p { margin: 0; line-height: 1.65; white-space: pre-wrap; min-width: 0; overflow-wrap: anywhere; }
+.note-number { flex: 0 0 28px; font-weight: 700; color: #a33427; font-size: .85rem; padding-top: 3px; }
+.decisions .meeting-note-list li { background: #f0f6f2; border-color: #cfdfd3; }
+.decisions .note-number { color: #326447; }
+.note-record-details { border-top: 1px solid #e8dfda; margin-top: 24px; padding-top: 16px; }
+.note-record-details summary { cursor: pointer; font-weight: 600; min-height: 44px; }
+.meeting-note-input { margin: 20px 0; min-width: 0; }
+.note-input-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 10px 0; }
+.note-input-toolbar small { color: #655b58; }
+.meeting-note-input textarea { display: block; width: 100%; min-height: 160px; padding: 14px; font-size: 16px; line-height: 1.8; resize: vertical; }
+@media (max-width: 760px) {
+  .note-section-heading h2 { font-size: 1.1rem; }
+  .meeting-note-list li { padding: 12px; gap: 8px; }
+  .note-input-toolbar .btn { min-height: 44px; }
+}
+.quick-notes-body { padding: 0 16px 16px; display: grid; gap: 14px; min-width: 0; }
+.note-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.note-tabs .btn { min-height: 44px; }
+.note-count { display: inline-block; min-width: 1.6em; padding: 0 6px; margin-left: 4px; border-radius: 999px; background: rgba(0,0,0,.08); font-size: .8rem; text-align: center; }
+.meeting-note-list.compact { margin: 0; gap: 6px; max-height: 40vh; overflow-y: auto; }
+.meeting-note-list.compact li { padding: 10px 12px; }
+.note-composer, .quick-notes .note-composer { display: flex; padding: 0; gap: 8px; align-items: flex-end; }
+.note-composer textarea { flex: 1; min-width: 0; min-height: 52px; padding: 12px; font-size: 16px; line-height: 1.5; resize: vertical; }
+.note-composer .btn { min-height: 52px; min-width: 80px; }
+.notes-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+@media (max-width: 760px) {
+  .note-composer .btn { min-width: 72px; }
+}

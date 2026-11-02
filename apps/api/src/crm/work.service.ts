@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { z } from 'zod';
-import { activitySchema, activityPatchSchema, meetingSchema, meetingPatchSchema, taskSchema, taskPatchSchema } from '@saleshub/shared';
+import { activitySchema, activityPatchSchema, meetingNoteAppendSchema, meetingNoteMaxLength, meetingSchema, meetingPatchSchema, noteItems, taskSchema, taskPatchSchema } from '@saleshub/shared';
 import { PrismaService } from '../prisma.service';
 import { Prisma, TaskStatus } from '../generated/prisma/client';
 import { Actor } from '../security/access';
@@ -9,6 +9,14 @@ import { ListQuery, paging } from './companies.service';
 
 export function taskScope(actor: Pick<Actor, 'id' | 'role'>): Prisma.TaskWhereInput {
   return actor.role === 'TECHNICAL' ? { assigneeId: actor.id, company: { archivedAt: null } } : { company: { AND: [companyScope(actor), { archivedAt: null }] } };
+}
+/** Last editor always; first author only when the meeting had no notes and no earlier attribution (older rows stay null). */
+function noteAttribution(actor: Actor, row: { notes: string | null; outcome: string | null; notesCreatedAt: Date | null; notesUpdatedAt: Date | null }) {
+  const now = new Date();
+  return {
+    notesUpdatedBy: actor.id, notesUpdatedByName: actor.name, notesUpdatedAt: now,
+    ...(!row.notesCreatedAt && !row.notesUpdatedAt && !row.notes && !row.outcome ? { notesCreatedBy: actor.id, notesCreatedByName: actor.name, notesCreatedAt: now } : {}),
+  };
 }
 const taskInclude = { company: { select: { id: true, displayName: true } }, assignee: { select: { id: true, name: true } } } as const;
 export async function scheduleTask(db: Db, task: { id: string; version: number; status: TaskStatus; dueAt: Date; reminderAt: Date | null }, assignment: boolean) {
@@ -141,13 +149,26 @@ export class WorkService {
         await db.meetingAttendee.deleteMany({ where: { meetingId: id } });
       }
       const changed = (input.notes !== undefined && (input.notes || null) !== (row.notes || null)) || (input.outcome !== undefined && (input.outcome || null) !== (row.outcome || null));
-      const now = new Date();
-      const attribution = changed ? {
-        notesUpdatedBy: actor.id, notesUpdatedByName: actor.name, notesUpdatedAt: now,
-        ...(!row.notesCreatedAt && !row.notesUpdatedAt && !row.notes && !row.outcome ? { notesCreatedBy: actor.id, notesCreatedByName: actor.name, notesCreatedAt: now } : {}),
-      } : {};
+      const attribution = changed ? noteAttribution(actor, row) : {};
       const result = await db.meeting.update({ where: { id }, data: { ...data, ...attribution, ...(attendees ? { attendees: { create: attendees } } : {}) }, include: { attendees: true } });
       await audit(db, actor.id, 'UPDATE', 'meeting', id, { fields: Object.keys(input) });
+      return result;
+    });
+  }
+  /** Appends bullets under the row lock, so two people taking notes in the same meeting never overwrite each other. */
+  async appendMeetingNote(actor: Actor, id: string, input: z.infer<typeof meetingNoteAppendSchema>) {
+    return this.prisma.$transaction(async db => {
+      await db.$queryRaw`SELECT id FROM "Meeting" WHERE id = ${id}::uuid FOR UPDATE`;
+      const row = await db.meeting.findFirst({ where: { id, company: companyScope(actor, true) } });
+      if (!row) throw new NotFoundException();
+      await requireCompany(db, actor, row.companyId, true);
+      const bullets = noteItems(input.text).map(line => `- ${line}`).join('\n');
+      if (!bullets) throw new BadRequestException('Not boş olamaz');
+      const current = (row[input.field] ?? '').trimEnd();
+      const next = current ? `${current}\n${bullets}` : bullets;
+      if (next.length > meetingNoteMaxLength) throw new BadRequestException(`Bu alan ${meetingNoteMaxLength} karakter sınırına ulaştı; eski maddeleri düzenleyip kısaltın.`);
+      const result = await db.meeting.update({ where: { id }, data: { [input.field]: next, ...noteAttribution(actor, row) }, include: { attendees: true } });
+      await audit(db, actor.id, 'UPDATE', 'meeting', id, { fields: [input.field], append: true });
       return result;
     });
   }
@@ -168,6 +189,11 @@ export class WorkService {
     const message = await messages(notifications.flatMap(n => n.messageId ? [n.messageId] : []));
     return notifications.filter(n => tasks.some(t => t.id === n.taskId) || quotes.some(q => q.id === n.quoteVersionId) || (n.messageId && message.has(n.messageId)))
       .map(n => ({ ...n, task: tasks.find(t => t.id === n.taskId), quote: quotes.find(q => q.id === n.quoteVersionId), message: n.messageId ? message.get(n.messageId) : undefined }));
+  }
+  /** Marks every unread notification of the reader; only their own rows, so no target access check is needed. */
+  async readAllNotifications(actor: Actor) {
+    const { count } = await this.prisma.notification.updateMany({ where: { userId: actor.id, readAt: null }, data: { readAt: new Date() } });
+    return { read: count };
   }
   async readNotification(actor: Actor, id: string, messages: MessageResolver) {
     const notification = await this.prisma.notification.findFirst({ where: { id, userId: actor.id } });

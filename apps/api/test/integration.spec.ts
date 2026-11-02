@@ -111,6 +111,9 @@ test('Phases 1–3: real PostgreSQL security and business workflows', async t =>
       const notifications = await call(tech, 'get', '/notifications').expect(200); assert.equal(notifications.body.length, 2);
       await call(tech, 'post', `/notifications/${notifications.body[0].id}/read`).expect(201);
       await call(b, 'post', `/notifications/${notifications.body[0].id}/read`).expect(404);
+      await call(b, 'post', '/notifications/read-all').expect(201).expect(({ body }) => assert.equal(body.read, 0));
+      const all = await call(tech, 'post', '/notifications/read-all').expect(201); assert.equal(all.body.read, 1);
+      assert.ok((await call(tech, 'get', '/notifications').expect(200)).body.every((n: { readAt: string | null }) => n.readAt));
       await call(tech, 'patch', `/tasks/${taskId}`, { status: 'DONE', version: 1 }).expect(200);
       const task = await call(tech, 'get', `/tasks/${taskId}`).expect(200); assert.ok(task.body.completedAt);
     });
@@ -140,6 +143,22 @@ test('Phases 1–3: real PostgreSQL security and business workflows', async t =>
       assert.equal(legacyEdit.body.notesUpdatedBy, manager.id);
       const createdWithNotes = await call(a, 'post', '/meetings', { ...body, notes: 'During creation' }).expect(201);
       assert.equal(createdWithNotes.body.notesCreatedBy, a.id);
+      // Meeting-time append: bullets go to the end under a row lock, parallel note takers do not overwrite each other.
+      const notesPath = `${path}/notes`;
+      await call(b, 'post', notesPath, { field: 'notes', text: 'No access' }).expect(404);
+      await call(viewer, 'post', notesPath, { field: 'notes', text: 'Not allowed' }).expect(403);
+      await call(a, 'post', notesPath, { field: 'notes', text: '   ' }).expect(400);
+      await call(a, 'post', notesPath, { field: 'agenda', text: 'x' }).expect(400);
+      await Promise.all([call(a, 'post', notesPath, { field: 'notes', text: 'Kurulum tarihi' }).expect(201), call(manager, 'post', notesPath, { field: 'notes', text: '- Lisans sayısı\n2) Eğitim ihtiyacı' }).expect(201)]);
+      const appended = await call(a, 'get', path).expect(200);
+      const lines = appended.body.notes.split('\n'); assert.equal(lines[0], 'First meeting note'); assert.equal(lines.length, 4);
+      for (const line of ['- Kurulum tarihi', '- Lisans sayısı', '- Eğitim ihtiyacı']) assert.ok(lines.includes(line));
+      assert.equal(appended.body.notesCreatedBy, a.id);
+      const decision = await call(manager, 'post', notesPath, { field: 'outcome', text: 'Cuma keşif' }).expect(201);
+      assert.equal(decision.body.outcome, 'Manager decision\n- Cuma keşif'); assert.equal(decision.body.notesUpdatedBy, manager.id);
+      await call(a, 'patch', path, { notes: 'x'.repeat(4995) }).expect(200);
+      await call(a, 'post', notesPath, { field: 'notes', text: 'Sınırı aşar' }).expect(400);
+      await call(a, 'patch', path, { notes: 'x'.repeat(5001) }).expect(400);
     });
     await t.test('role changes and deactivation immediately affect existing sessions', async () => {
       await call(admin, 'patch', `/users/${b.id}`, { role: 'VIEWER' }).expect(200);

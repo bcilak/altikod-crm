@@ -6,6 +6,9 @@ export const stageLabels: Record<typeof stages[number], string> = { NEW_LEAD: 'Y
 export const uuid = z.string().uuid();
 const short = z.string().trim().min(1).max(200);
 const optionalText = z.string().trim().max(2000).nullable().optional();
+/** Meeting notes/decisions are bullet lists that grow during the meeting; the web form uses the same limit. */
+export const meetingNoteMaxLength = 5000;
+const noteText = z.string().trim().max(meetingNoteMaxLength).nullable().optional();
 export const dateTime = z.string().datetime({ offset: true });
 export const email = z.string().trim().toLowerCase().email().max(254);
 export const password = z.string().min(12).max(128);
@@ -43,9 +46,15 @@ export const taskPatchSchema = taskSchema.omit({ companyId: true }).partial().ex
 const attendeeSchema = z.object({ userId: uuid.optional(), contactId: uuid.optional(), externalEmail: email.optional() }).strict().refine(a => [a.userId, a.contactId, a.externalEmail].filter(Boolean).length === 1, 'Exactly one attendee identity required');
 export const meetingSchema = z.object({ companyId: uuid, opportunityId: uuid.nullable().optional(), title: short, startsAt: dateTime, endsAt: dateTime,
   timezone: z.string().refine(value => { try { new Intl.DateTimeFormat('tr', { timeZone: value }); return true; } catch { return false; } }).default('Europe/Istanbul'),
-  agenda: optionalText, notes: optionalText, outcome: optionalText, location: optionalText, attendees: z.array(attendeeSchema).max(50).default([]),
+  agenda: optionalText, notes: noteText, outcome: noteText, location: optionalText, attendees: z.array(attendeeSchema).max(50).default([]),
 }).strict();
 export const meetingPatchSchema = meetingSchema.omit({ companyId: true }).partial().extend({ timezone: meetingSchema.shape.timezone.removeDefault().optional(), attendees: meetingSchema.shape.attendees.removeDefault().optional() }).strict();
+/** Bullet lines of a meeting note text; list markers (-, *, •, 1., 1)) are stripped for display, the stored text is unchanged. */
+export function noteItems(value?: string | null) {
+  return (value ?? '').split(/\r?\n/).map(line => line.trim().replace(/^(?:[-*•]|\d+[.)])\s+/, '')).filter(line => line && !/^[-*•]$/.test(line));
+}
+/** One bullet sent during the meeting; appended on the server so parallel note takers never overwrite each other. Lines become separate bullets. */
+export const meetingNoteAppendSchema = z.object({ field: z.enum(['notes', 'outcome']), text: z.string().trim().min(1).max(1000) }).strict();
 export const opportunitySchema = z.object({ companyId: uuid, ownerId: uuid.optional(), title: short,
   estimatedValue: z.string().regex(/^(0|[1-9]\d{0,13})(\.\d{1,4})?$/), currency: z.enum(['TRY', 'USD', 'EUR', 'GBP']),
   probability: z.number().int().min(0).max(100), expectedCloseAt: dateTime.nullable().optional(), nextActionAt: dateTime,

@@ -8,7 +8,7 @@
 |---|---|---|
 | Staging ortamı `deploy/compose.production.yml` ile kurulu; ClamAV servisi sağlıklı, imzalar güncel | İşletim | Bekliyor |
 | SMTP sağlayıcısı seçildi, davet e-postaları ulaşıyor | İşletim | Bekliyor |
-| Şifreli yedek + geri yükleme tatbikatı Docker'lı ortamda mesaj ekleriyle birlikte geçti (`npm run test:integration -- --backup-drill`) | İşletim | Bekliyor (bu geliştirme ortamında Docker yoktu) |
+| Şifreli yedek + geri yükleme tatbikatı Docker'lı ortamda mesaj ekleriyle birlikte geçti (`npm run test:integration -- --backup-drill`) | İşletim | Bekliyor (2 Kasım: Docker kullanılabilir; mesaj eklerini kapsayan tatbikat sonucu henüz kayıtlı değil) |
 | Caddy üzerinden canlı akış (`/api/v1/messaging/stream`) staging alan adında anında çalışıyor | İşletim | Bekliyor |
 | Aşağıdaki aydınlatma metni hukuk incelemesinden geçti ve kullanıcılara duyuruldu | Ürün sahibi + hukuk | Bekliyor |
 | Yönetici erişimi (özel mesajlar) ve 2 yıllık saklama için hukuki görüş alındı | Ürün sahibi + hukuk | Bekliyor |

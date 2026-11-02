@@ -1,14 +1,54 @@
 # IT SalesHub — Uygulama yol haritası
 
+## Güncel plan — 2 Kasım 2026
+
+Faz 0–6'nın yazılımı, Faz 8 mesajlaşma ve Faz 9 PWA/Web Push uygulandı. Faz 5'in gerçek pilot/canlı kabulü, F8-07 ekip pilotu ve Faz 9 gerçek cihaz kabulü açık. Faz 7 ürün sahibi kararıyla kapsam dışı kalır. Aşağıdaki tarihsel faz kayıtları yazılım teslimatını anlatır; canlıya hazır olma onayı değildir.
+
+Mobil kullanım iyileştirmeleri de tamamlandı: alt gezinme, görev başlat/tamamla, hızlı toplantı notu, sayfalar arasında bellekte taslak koruma ve telefon mesaj yazma düzeni. Kabul kaydı: [mobil iş akışları](mobile-workflows.md). Taslaklar yeniden yükleme/oturum kapanmasında korunmaz; çevrimdışı çalışma uygulanmış değildir. iPhone/Android için mevcut teslimat PWA'dır, mağazadan indirilen native uygulama değildir.
+
+### Doğrulama durumu
+
+- Yerelde lint, tip kontrolü, web üretim derlemesi ve mobil senaryo dahil 8 Playwright senaryosu geçti. Önceki backend doğrulamasında gerçek ClamAV ile 85 PostgreSQL entegrasyon kontrolü geçti.
+- GitHub Actions tanımı var; bu plan hazırlanırken son uzak çalıştırmanın başarılı sonucu doğrulanmadı.
+- Son bağımlılık denetiminde geliştirme araç zincirinde 11 orta seviye bulgu vardı; yüksek/kritik bulgu yoktu. Güncelleme ve tekrar denetim işi açık.
+- Mesaj/bilgi bankası eklerini de içeren güncel yedek-kurtarma tatbikatı açık. Önceki DB/PDF doğrulaması bunun yerine sayılmaz. Docker artık yerelde kullanılabilir; eski “Docker yok” notu tarihsel engeldir.
+- Gerçek SMTP teslimi, HTTPS üzerinden cihaz bildirimi ve fiziksel telefon klavyesi henüz doğrulanmadı.
+
+### Bundan sonraki iş sırası
+
+| Sıra | İş paketi / sorumlu | Tamamlanma koşulu | Bağımlılık |
+|---|---|---|---|
+| 1 | Teknik kabul açıkları — geliştirme | Son commit için uzak CI sonucu; bağımlılık bulgularının değerlendirilmesi; izole test verisiyle DB + PDF + bilgi bankası + mesaj dosyası geri yükleme ve hash doğrulaması kayıtlı | Mevcut depo ve test ortamı |
+| 2 | Staging hazırlığı — işletim + ürün sahibi | Sunucu/alan adı, TLS, SMTP, VAPID, ClamAV, ayrı DB rolleri ve sır yönetimi hazır; davet/parola sıfırlama gerçek posta kutusuna ulaşıyor; proxy üzerinden SSE çalışıyor | Altyapı ve e-posta sağlayıcısı kararı |
+| 3 | Gerçek mobil kabul — geliştirme + pilot ekip | iPhone Safari/PWA ve Android Chrome/PWA'da iş başlatma, not kaydı, mesaj/dosya gönderme; açık klavye, yatay ekran, arka plandan dönüş, bağlantı kesilmesi, bildirim ve oturum iptali sonuçları kayıtlı | HTTPS staging ve test cihazları |
+| 4 | İşletim kabulü — işletim | Zamanlanmış ve sunucu dışı yedek, kalıcı kurtarma provası, anahtar erişimi, disk/hazırlık/mail/push/tarama alarmları; hedef kullanıcı yükünde ölçüm ve container taraması | Staging; kabul edilen veri kaybı/kurtarma süresi ve yük hedefleri |
+| 5 | Ekip pilotu — ürün sahibi + satış/teknik ekip | 4–6 kişiyle 10 iş günü; CRM satış→teklif→devir ve mesajlaşma senaryoları; yetki ihlali/veri kaybı yok, kritik/yüksek sorunlar kapalı, pilot ölçümleri doldurulmuş | 1–4; rol/veri paylaşımı ve saklama kararları |
+| 6 | Canlı geçiş — ürün sahibi + işletim | Veri aktarım örneği, kullanıcı eğitimi, sorumlular ve geri dönüş planı hazır; [canlı kontrol listesi](go-live-checklist.md) tamam; ayrıca açık dağıtım talimatı alınmış | Pilot kabulü |
+
+2 hazırlanırken 1 yürütülebilir; 3 ve 4 staging üzerinde paralel planlanabilir. Takvim, sunucu/sağlayıcı erişimi ve ekip müsaitliği netleşince belirlenir; 10 iş günlük pilot geliştirme süresine dahil değildir.
+
+### Planlama için netleştirilecek kararlar
+
+1. Kullanılacak sunucu, CRM alan adı, SMTP sağlayıcısı ve işletim sorumlusu.
+2. Pilot katılımcıları, başlangıç tarihi, gerçek iPhone ve Android test cihazları.
+3. Eşzamanlı kullanıcı/veri hacmi hedefi, kabul edilebilir veri kaybı ve kurtarma süresi, yedek saklama ve alarm alıcısı.
+4. Rol/paylaşım, teklif onay eşikleri ve mesaj saklama/aydınlatma kararlarının pilot öncesi teyidi.
+
+Yeni bir faz başlatmak yerine önce bu kabul açıklarını kapatmak önerilir. E-posta/takvim senkronizasyonu, AI, ERP, native mağaza uygulaması ve kalıcı çevrimdışı taslaklar bu planla otomatik olarak kapsam içine alınmaz. Hukuki talep için özel mesaj dışa aktarımı ayrıca gereksinim kararı bekler.
+
+## Tarihsel faz kayıtları
+
 Tarih: 30 Ekim 2026. Durum: Faz 0–4 ve Faz 6 uygulandı ve yerelde doğrulandı (`docs/phase-6.md`); Faz 7 ürün sahibi kararıyla kapsam dışı. Faz 9 (telefon bildirimleri, tepkiler, iPhone/Android uygulaması) uygulandı; canlıya geçiş listesi `docs/go-live-checklist.md`. Faz 8 (ekip içi mesajlaşma ve belge paylaşımı): kararlar varsayılanlarla kabul edildi, F8-02…F8-06 yazılımı uygulandı (mesajlaşma, dosyalar ve ClamAV, canlı akış, bahsetme/bildirim, düzenleme/silme/moderasyon/sabitleme/sessize alma/arama/saklama/bilgi bankası önerisi); gerçek kullanıcı pilotu (F8-07) ve ön koşulları açık — `docs/pilot-messaging.md` — `docs/phase-8-team-messaging.md`. Faz 5 yazılımı uygulandı; SMTP adaptörü ve en az yetkili DB rolü eklendi. Gerçek pilot ve canlı geçiş kapıları açık. Güncel kayıt: `docs/phases-4-5.md`. Güncel teslimat kaydı `docs/phases-1-3.md`; Faz 0 tarihsel kaydı `docs/phase-0-status.md`. Kaynak plan korunmuştur. Faz 1–3 yetki ve akış varsayımları kodda uygulanmıştır; teklif ve canlıya çıkış kararları ilgili faz öncesi kesinleştirilir.
 
-## MVP sınırı
+## İlk MVP sınırı (tarihsel)
 
 Firma → kişi → faaliyet → takip görevi → fırsat → teklif → onay → müşteri kararı → kazanım/kayıp → devir özeti.
 
 MVP: oturum ve kullanıcılar, kayıt sahipliği/paylaşım, firma/kişi, faaliyetler, görev/toplantı, fırsatlar, temel ürün/hizmet kartları, teklif/PDF/revizyon, temel raporlar, sistem içi bildirimler, CSV, devir özeti ve görevi.
 
 MVP dışı: akademi, kapsamlı bilgi yayın sistemi ve proje yönetimi, e-posta/takvim senkronizasyonu, AI, ERP/stok, elektronik imza, otomatik WhatsApp, çok kiracılı SaaS.
+
+Akademi, bilgi bankası ve proje teslimatı daha sonra Faz 6 ile uygulandı; yukarıdaki ifade yalnız ilk MVP sınırını gösterir.
 
 ## Fazlar ve çıkış koşulları
 

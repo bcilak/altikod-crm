@@ -1,0 +1,51 @@
+import { test, expect } from '@playwright/test';
+test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+test('phone: start work, keep and save meeting notes, compose multiline messages', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByLabel('E-posta', { exact: true }).fill('e2e-admin@example.invalid');
+  await page.getByLabel('Parola', { exact: true }).fill('E2E-only-password!42');
+  await page.getByRole('button', { name: 'Giriş yap' }).click(); await expect(page).toHaveURL(/dashboard/);
+  const me = await (await page.request.get('/api/v1/auth/me')).json();
+  const post = async (path: string, data: object) => { const response = await page.request.post(`/api/v1${path}`, { headers: { Origin: 'http://localhost:3100', 'X-CSRF-Token': me.csrfToken }, data }); expect(response.ok(), await response.text()).toBeTruthy(); return response.json(); };
+  const company = await post('/companies', { displayName: 'Mobil saha müşterisi', legalName: 'Mobil saha test firması' });
+  await post('/tasks', { companyId: company.id, assigneeId: me.id, title: 'Mobil keşif takibi', dueAt: new Date(Date.now() + 86400_000).toISOString() });
+  const start = new Date(); start.setDate(15); start.setHours(10, 0, 0, 0);
+  await post('/meetings', { companyId: company.id, title: 'Mobil müşteri görüşmesi', startsAt: start.toISOString(), endsAt: new Date(start.getTime() + 3600_000).toISOString(), timezone: 'Europe/Istanbul', attendees: [] });
+  const nav = page.getByRole('navigation', { name: 'Hızlı gezinme' });
+  await expect(nav).toBeVisible();
+  await nav.getByRole('link', { name: 'İşler', exact: true }).tap();
+  const task = page.locator('.task-card').filter({ has: page.getByRole('heading', { name: 'Mobil keşif takibi' }) });
+  await task.getByRole('button', { name: 'Başlat', exact: true }).tap(); await expect(task.locator('.badge')).toHaveText('Sürüyor');
+  await task.getByRole('button', { name: 'Tamamla', exact: true }).tap(); await expect(task.locator('.badge')).toHaveText('Tamamlandı');
+  await page.screenshot({ path: 'test-results/mobile-quick-tasks.png', fullPage: true });
+  await nav.getByRole('link', { name: 'Takvim', exact: true }).tap();
+  const meeting = page.locator('article.panel').filter({ has: page.getByRole('heading', { name: 'Mobil müşteri görüşmesi' }) });
+  const notes = meeting.locator('.quick-notes'); await notes.locator('summary').tap();
+  await notes.getByLabel('Toplantı notları', { exact: true }).fill('Müşteri saha kurulumunu görüştü.\nİkinci lokasyon incelenecek.');
+  await notes.getByLabel('Kararlar ve sonraki adım').fill('Teknik ekip cuma keşif yapacak.');
+  // Client-side navigation preserves unsaved work without localStorage/sessionStorage.
+  await nav.getByRole('link', { name: 'İşler', exact: true }).tap(); await expect(page).toHaveURL(/tasks/); await nav.getByRole('link', { name: 'Takvim', exact: true }).tap(); await expect(page).toHaveURL(/calendar/);
+  if (await notes.getAttribute('open') === null) await notes.locator('summary').tap(); await expect(notes.getByLabel('Toplantı notları', { exact: true })).toHaveValue(/İkinci lokasyon/);
+  await notes.getByRole('button', { name: 'Notları kaydet' }).tap(); await expect(notes.getByRole('status')).toHaveText('Notlar kaydedildi.');
+  await page.reload(); await meeting.locator('.quick-notes summary').tap(); await expect(notes.getByLabel('Toplantı notları', { exact: true })).toHaveValue(/İkinci lokasyon/);
+  await page.screenshot({ path: 'test-results/mobile-meeting-notes.png', fullPage: true });
+  await nav.getByRole('link', { name: 'Mesajlar', exact: true }).tap(); await page.getByRole('link', { name: /^#genel/ }).tap();
+  const join = page.getByRole('button', { name: 'Kanala katıl', exact: true }); if (await join.isVisible()) await join.tap();
+  const composer = page.getByLabel('Mesaj yaz', { exact: true });
+  await composer.fill('Telefondan ilk satır'); await composer.press('Enter'); await composer.pressSequentially('İkinci satır');
+  await expect(composer).toHaveValue('Telefondan ilk satır\nİkinci satır');
+  await page.getByRole('button', { name: 'Gönder', exact: true }).tap(); await expect(composer).toHaveValue('');
+  await expect(page.getByRole('log', { name: 'Mesajlar' }).getByText('Telefondan ilk satır')).toBeVisible();
+  await composer.fill('Gönderilmemiş mobil taslak');
+  await nav.getByRole('link', { name: 'İşler', exact: true }).tap(); await expect(page).toHaveURL(/tasks/); await nav.getByRole('link', { name: 'Mesajlar', exact: true }).tap(); await expect(page).toHaveURL(/messages/); await page.getByRole('link', { name: /^#genel/ }).tap();
+  await expect(composer).toHaveValue('Gönderilmemiş mobil taslak');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  await page.screenshot({ path: 'test-results/mobile-chat-work.png', fullPage: true });
+  // A short visible viewport simulates keyboard space; real iOS keyboard still needs device QA.
+  await page.setViewportSize({ width: 390, height: 480 }); await composer.focus(); await composer.scrollIntoViewIfNeeded();
+  const send = page.getByRole('button', { name: 'Gönder', exact: true }); await send.scrollIntoViewIfNeeded();
+  await expect(send).toBeInViewport(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  await page.setViewportSize({ width: 844, height: 390 }); await expect(nav).toBeVisible(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  await page.setViewportSize({ width: 360, height: 800 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+});

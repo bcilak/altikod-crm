@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, formatDate, upload } from '../lib/api';
 import { fileSize } from '../lib/delivery';
 import { attachmentScanLabels, attachmentUrl, conversationsKey, downloadable, filesKey, messageAttachmentAccept, messageAttachmentMaxBytes, messageAttachmentsPerMessage, messageEditWindowMs, messageMaxLength, messageReactions, messageStateLabels, newNonce, pinsKey, roleLabels, type Attachment, type Colleague, type Mention, type Message, type MessagePage, type SharedFile } from '../lib/messaging';
+import { useWorkingDraft } from './working-drafts';
 import { Notice } from './ui';
 import { useLiveIntervals } from './live';
 
@@ -39,11 +40,11 @@ export function AttachmentView({ file }: { file: Attachment }) {
 }
 
 export function Composer({ conversationId, parentId, onSent, label = 'Mesaj yaz' }: { conversationId: string; parentId?: string; onSent?: () => void; label?: string }) {
-  const [body, setBody] = useState(''); const [error, setError] = useState<unknown>(); const [busy, setBusy] = useState(false);
-  const [files, setFiles] = useState<Attachment[]>([]); const [uploading, setUploading] = useState(0); const [sendFailed, setSendFailed] = useState(false);
-  const nonce = useRef(newNonce()); const picker = useRef<HTMLInputElement>(null); const box = useRef<HTMLTextAreaElement>(null); const cache = useQueryClient();
+  const [body, setBody] = useWorkingDraft(`message:${conversationId}:${parentId ?? 'root'}`, ''); const [error, setError] = useState<unknown>(); const [busy, setBusy] = useState(false);
+  const [files, setFiles] = useWorkingDraft<Attachment[]>(`message-files:${conversationId}:${parentId ?? 'root'}`, []); const [uploading, setUploading] = useState(0); const [sendFailed, setSendFailed] = useState(false);
+  const [nonce, setNonce] = useWorkingDraft(`message-nonce:${conversationId}:${parentId ?? 'root'}`, newNonce()); const picker = useRef<HTMLInputElement>(null); const box = useRef<HTMLTextAreaElement>(null); const cache = useQueryClient();
   // @-mentions: the typed “@name” stays plain text; the chosen people travel as ids and the server checks they can read the conversation.
-  const [mentions, setMentions] = useState<Mention[]>([]); const [query, setQuery] = useState<string | null>(null); const [active, setActive] = useState(0);
+  const [mentions, setMentions] = useWorkingDraft<Mention[]>(`mentions:${conversationId}:${parentId ?? 'root'}`, []); const [query, setQuery] = useState<string | null>(null); const [active, setActive] = useState(0);
   const suggestions = useQuery({ queryKey: ['/messaging/users', query], queryFn: () => api<Colleague[]>(`/messaging/users?search=${encodeURIComponent(query?.trim() ?? '')}`), enabled: query !== null, staleTime: 60_000 });
   const options = query === null ? [] : (suggestions.data ?? []).slice(0, 6);
   const listId = `mentions-${conversationId}-${parentId ?? 'root'}`;
@@ -66,17 +67,17 @@ export function Composer({ conversationId, parentId, onSent, label = 'Mesaj yaz'
     for (const file of chosen) {
       if (file.size > messageAttachmentMaxBytes) { setError(`${file.name}: dosya en fazla 20 MB olabilir`); continue; }
       setUploading(n => n + 1);
-      try { const row = await upload<Attachment>(`/messaging/conversations/${conversationId}/attachments`, file, 'Dosya en fazla 20 MB olabilir'); setFiles(prev => [...prev, row]); nonce.current = newNonce(); }
+      try { const row = await upload<Attachment>(`/messaging/conversations/${conversationId}/attachments`, file, 'Dosya en fazla 20 MB olabilir'); setFiles(prev => [...prev, row]); setNonce(newNonce()); }
       catch (e) { setError(e instanceof Error ? new Error(`${file.name}: ${e.message}`) : e); } finally { setUploading(n => n - 1); }
     }
   };
-  const detach = async (file: Attachment) => { setFiles(prev => prev.filter(f => f.id !== file.id)); nonce.current = newNonce(); await api(`/messaging/attachments/${file.id}/remove`, 'POST').catch(() => undefined); };
+  const detach = async (file: Attachment) => { setFiles(prev => prev.filter(f => f.id !== file.id)); setNonce(newNonce()); await api(`/messaging/attachments/${file.id}/remove`, 'POST').catch(() => undefined); };
   const send = async () => {
     if ((!body.trim() && !files.length) || busy || uploading) return;
-    setBusy(true); setError(undefined); setSendFailed(false);
+    setBusy(true); setError(undefined); setSendFailed(false); setNonce(nonce);
     try {
-      await api(`/messaging/conversations/${conversationId}/messages`, 'POST', { body, clientNonce: nonce.current, attachmentIds: files.map(f => f.id), mentionIds: mentions.filter(m => body.includes(`@${m.name}`)).map(m => m.id), ...(parentId ? { parentId } : {}) });
-      setBody(''); setFiles([]); setMentions([]); nonce.current = newNonce();
+      await api(`/messaging/conversations/${conversationId}/messages`, 'POST', { body, clientNonce: nonce, attachmentIds: files.map(f => f.id), mentionIds: mentions.filter(m => body.includes(`@${m.name}`)).map(m => m.id), ...(parentId ? { parentId } : {}) });
+      setBody(''); setFiles([]); setMentions([]); setNonce(newNonce());
       await Promise.all([cache.invalidateQueries({ queryKey: ['messaging-messages', conversationId] }), cache.invalidateQueries({ queryKey: conversationsKey }), cache.invalidateQueries({ queryKey: filesKey(conversationId) })]);
       onSent?.();
     } catch (e) { setError(e); setSendFailed(true); } finally { setBusy(false); }
@@ -87,15 +88,15 @@ export function Composer({ conversationId, parentId, onSent, label = 'Mesaj yaz'
       if ((e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey) { e.preventDefault(); choose(options[active] ?? options[0]!); return; }
       if (e.key === 'Escape') { e.preventDefault(); setQuery(null); return; }
     }
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); }
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !window.matchMedia('(pointer: coarse)').matches) { e.preventDefault(); void send(); }
   };
   const onPaste = (e: ClipboardEvent) => { if (e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files); } };
   const onDrop = (e: DragEvent) => { if (e.dataTransfer.files.length) { e.preventDefault(); void attach(e.dataTransfer.files); } };
   const full = files.length + uploading >= messageAttachmentsPerMessage;
   return <form className="composer" onSubmit={e => { e.preventDefault(); void send(); }} onDragOver={e => e.preventDefault()} onDrop={onDrop}>
-    <label><span className="sr-only">{label}</span><textarea ref={box} aria-label={label} placeholder={`${label} · Enter gönderir, Shift+Enter yeni satır, @ ile kişi anın`} rows={2} maxLength={messageMaxLength} value={body}
+    <label><span className="sr-only">{label}</span><textarea ref={box} aria-label={label} placeholder={`${label} · @ ile kişi anın`} enterKeyHint="enter" rows={2} maxLength={messageMaxLength} value={body}
       role="combobox" aria-autocomplete="list" aria-expanded={options.length > 0} aria-controls={listId} aria-activedescendant={options.length ? `${listId}-${active}` : undefined}
-      onChange={e => { setBody(e.target.value); track(e.target.value, e.target.selectionStart); if (sendFailed) nonce.current = newNonce(); }} onKeyDown={onKey} onPaste={onPaste} onBlur={() => setTimeout(() => setQuery(null), 150)} /></label>
+      onChange={e => { setBody(e.target.value); track(e.target.value, e.target.selectionStart); if (sendFailed) setNonce(newNonce()); }} onKeyDown={onKey} onPaste={onPaste} onBlur={() => setTimeout(() => setQuery(null), 150)} /></label>
     {options.length > 0 && <ul id={listId} role="listbox" className="mention-options" aria-label="Bahsedilecek kişi">{options.map((p, i) => <li key={p.id} id={`${listId}-${i}`} role="option" aria-selected={i === active} onMouseDown={e => { e.preventDefault(); choose(p); }}>{p.name} <small className="muted">· {roleLabels[p.role] ?? p.role}</small></li>)}</ul>}
     {(files.length > 0 || uploading > 0) && <ul className="draft-files" aria-label="Eklenecek dosyalar">{files.map(f => <li key={f.id} className="file-chip"><span className="file-ext">{extension(f.name)}</span><span><strong>{f.name}</strong><small className="block">{fileSize(f.size)}{f.scanStatus !== 'CLEAN' ? ` · ${attachmentScanLabels[f.scanStatus]}` : ''}</small></span><button type="button" className="link-button" aria-label={`${f.name} dosyasını kaldır`} onClick={() => void detach(f)}>Kaldır</button></li>)}
       {uploading > 0 && <li className="file-chip" role="status">Yükleniyor ve taranıyor…</li>}</ul>}

@@ -3,6 +3,7 @@ import './globals.css';
 import './fonts.css';
 import './playful.css';
 import './messaging.css';
+import './mobile.css';
 import Providers from '../components/providers';
 
 export const metadata: Metadata = {

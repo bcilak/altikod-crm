@@ -40,6 +40,7 @@ test('desktop sales workflow and mobile navigation', async ({ page }) => {
   await page.locator('form').getByRole('button', { name: 'Kaydet' }).click();
   await expect(page.locator('.badge').filter({ hasText: 'Tamamlandı' })).toBeVisible();
   await page.screenshot({ path: 'test-results/mobile-tasks.png', fullPage: true });
+  await page.getByRole('button', { name: 'Menüyü aç' }).click();
   await page.getByRole('button', { name: 'Çıkış yap' }).click();
   await expect(page).toHaveURL(/login/);
 });

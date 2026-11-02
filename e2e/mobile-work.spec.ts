@@ -30,6 +30,14 @@ test('phone: start work, keep and save meeting notes, compose multiline messages
   await notes.getByRole('button', { name: 'Notları kaydet' }).tap(); await expect(notes.getByRole('status')).toHaveText('Notlar kaydedildi.');
   await page.reload(); await meeting.locator('.quick-notes summary').tap(); await expect(notes.getByLabel('Toplantı notları', { exact: true })).toHaveValue(/İkinci lokasyon/);
   await page.screenshot({ path: 'test-results/mobile-meeting-notes.png', fullPage: true });
+  await meeting.getByRole('link', { name: 'Notları oku', exact: true }).tap();
+  await expect(page).toHaveURL(/meetings\//);
+  await expect(page.getByRole('heading', { name: 'Not kayıt bilgileri' })).toBeVisible();
+  await expect(page.locator('.meeting-note-meta')).toContainText(me.name);
+  await expect(page.locator('.meeting-reader')).toContainText('İkinci lokasyon incelenecek.');
+  await expect(page.getByLabel('Toplantı notları', { exact: true })).not.toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  await page.screenshot({ path: 'test-results/mobile-meeting-reader.png', fullPage: true });
   await nav.getByRole('link', { name: 'Mesajlar', exact: true }).tap(); await page.getByRole('link', { name: /^#genel/ }).tap();
   const join = page.getByRole('button', { name: 'Kanala katıl', exact: true }); if (await join.isVisible()) await join.tap();
   const composer = page.getByLabel('Mesaj yaz', { exact: true });

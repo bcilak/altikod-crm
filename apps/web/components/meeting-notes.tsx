@@ -5,7 +5,7 @@ import { api, type Meeting } from '../lib/api';
 import { Notice } from './ui';
 import { useWorkingDraft } from './working-drafts';
 
-export default function MeetingNotes({ meeting }: { meeting: Meeting }) {
+export default function MeetingNotes({ meeting, label = 'Not al' }: { meeting: Meeting; label?: string }) {
   const [notes, setNotes] = useWorkingDraft(`meeting-notes:${meeting.id}`, meeting.notes ?? ''); const [outcome, setOutcome] = useWorkingDraft(`meeting-outcome:${meeting.id}`, meeting.outcome ?? '');
   const [saved, setSaved] = useState({ notes: meeting.notes ?? '', outcome: meeting.outcome ?? '' });
   const [busy, setBusy] = useState(false); const [error, setError] = useState<unknown>(); const [done, setDone] = useState(false); const cache = useQueryClient();
@@ -15,7 +15,7 @@ export default function MeetingNotes({ meeting }: { meeting: Meeting }) {
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
-  return <details className="quick-notes"><summary>Not al</summary><form onSubmit={async e => {
+  return <details className="quick-notes"><summary>{label}</summary><form onSubmit={async e => {
     e.preventDefault(); if (busy) return; setBusy(true); setError(undefined); setDone(false);
     try { await api(`/meetings/${meeting.id}`, 'PATCH', { notes: notes || null, outcome: outcome || null }); setSaved({ notes, outcome }); setDone(true); await cache.invalidateQueries({ queryKey: [] }); }
     catch (error) { setError(error); } finally { setBusy(false); }

@@ -270,6 +270,12 @@ model Meeting {
   agenda       String?
   notes        String?
   outcome      String?
+  notesCreatedBy String? @db.Uuid
+  notesCreatedByName String?
+  notesCreatedAt DateTime? @db.Timestamptz(6)
+  notesUpdatedBy String? @db.Uuid
+  notesUpdatedByName String?
+  notesUpdatedAt DateTime? @db.Timestamptz(6)
   location     String?
   createdBy    String @db.Uuid
   createdAt    DateTime @default(now()) @db.Timestamptz(6)

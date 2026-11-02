@@ -2,6 +2,8 @@
 
 ## Güncel plan — 2 Kasım 2026
 
+Toplantı notlarına ilk/son kaydeden kişi ve UTC tarih bilgisi, ayrı mobil okuma sayfası eklendi. Eski kayıtlara yazar/tarih uydurulmaz. Migration ve kabul: [toplantı notları](meeting-notes.md).
+
 Kullanıcı talebiyle e-postasız hesap oluşturma, yönetici geçici parola atama ve ilk girişte zorunlu parola değiştirme eklendi. API, migration ve kabul koşulları: [kullanıcı yönetimi](managed-users.md). Bu geliştirme SMTP kurulumu gerektirmez.
 
 İlk sunucu kurulumu kararı: boş veritabanı ve e-posta kapalı mod; mevcut Apache/Virtualmin kullanılacak. [Kurulum ve kabul koşulları](apache-deployment.md). SMTP ve tam ekip pilotu sonraki iş olarak açık kalır.

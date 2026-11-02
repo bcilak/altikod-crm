@@ -120,6 +120,26 @@ test('Phases 1–3: real PostgreSQL security and business workflows', async t =>
       await call(a, 'post', '/meetings', { ...body, endsAt: body.startsAt }).expect(400);
       await call(a, 'post', '/meetings', { ...body, attendees: [{ contactId, userId: a.id }] }).expect(400);
       await call(b, 'patch', `/meetings/${meeting.body.id}`, { notes: 'No access' }).expect(404);
+      const path = `/meetings/${meeting.body.id}`;
+      await call(b, 'get', path).expect(404);
+      assert.equal(meeting.body.notesCreatedAt, null);
+      await call(a, 'patch', path, { notes: 'spoof', notesCreatedBy: b.id }).expect(400);
+      const first = await call(a, 'patch', path, { notes: 'First meeting note' }).expect(200);
+      assert.equal(first.body.notesCreatedBy, a.id); assert.equal(first.body.notesCreatedByName, 'salesa');
+      assert.ok(first.body.notesCreatedAt.endsWith('Z'));
+      const unchanged = await call(manager, 'patch', path, { notes: 'First meeting note', location: 'Office' }).expect(200);
+      assert.equal(unchanged.body.notesUpdatedAt, first.body.notesUpdatedAt);
+      const edited = await call(manager, 'patch', path, { outcome: 'Manager decision' }).expect(200);
+      assert.equal(edited.body.notesCreatedBy, a.id); assert.equal(edited.body.notesCreatedAt, first.body.notesCreatedAt);
+      assert.equal(edited.body.notesUpdatedBy, manager.id); assert.equal(edited.body.notesUpdatedByName, 'manager');
+      const reader = await call(a, 'get', path).expect(200); assert.equal(reader.body.outcome, 'Manager decision');
+      await call(viewer, 'patch', path, { notes: 'Not allowed' }).expect(403);
+      const legacy = await db.meeting.create({ data: { companyId, title: 'Legacy note', startsAt: new Date(), endsAt: new Date(Date.now() + 3600000), createdBy: a.id, notes: 'Older note' } });
+      const legacyEdit = await call(manager, 'patch', `/meetings/${legacy.id}`, { notes: 'Updated older note' }).expect(200);
+      assert.equal(legacyEdit.body.notesCreatedAt, null); assert.equal(legacyEdit.body.notesCreatedBy, null);
+      assert.equal(legacyEdit.body.notesUpdatedBy, manager.id);
+      const createdWithNotes = await call(a, 'post', '/meetings', { ...body, notes: 'During creation' }).expect(201);
+      assert.equal(createdWithNotes.body.notesCreatedBy, a.id);
     });
     await t.test('role changes and deactivation immediately affect existing sessions', async () => {
       await call(admin, 'patch', `/users/${b.id}`, { role: 'VIEWER' }).expect(200);

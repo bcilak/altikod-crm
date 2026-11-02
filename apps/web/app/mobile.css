@@ -23,3 +23,8 @@
   .link-button,.action-menu summary,.reaction,.reaction-picker summary{min-height:44px}.reaction-picker[open]>div{gap:0;padding:4px;max-width:calc(100vw - 90px);flex-wrap:wrap}.message{padding:10px}.message-meta{gap:4px 8px;font-size:13px}.message-meta time{font-size:12px}.message-body{font-size:16px}.keyboard-open .mobile-bottom-nav{display:none}.keyboard-open .composer,.keyboard-open .notes-save{bottom:0}.keyboard-open .main-content{padding-bottom:16px!important}
   .facts{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);overflow-wrap:anywhere}.form-grid{grid-template-columns:minmax(0,1fr)}.pager{justify-content:space-between}.pager .btn{min-width:85px}
 }
+
+.meeting-reader { max-width: 900px; overflow-wrap: anywhere; }
+.meeting-reader h2 { margin-top: 1.5rem; }
+.meeting-reader p { line-height: 1.8; }
+.meeting-note-meta { margin: 1rem 0; font-size: .9rem; overflow-wrap: anywhere; }

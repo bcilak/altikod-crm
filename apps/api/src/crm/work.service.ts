@@ -112,7 +112,9 @@ export class WorkService {
       if (new Date(input.endsAt) <= new Date(input.startsAt)) throw new BadRequestException('Bitiş başlangıçtan sonra olmalı');
       await this.attendees(db, input.companyId, input.attendees);
       const { attendees, ...data } = input;
-      const row = await db.meeting.create({ data: { ...data, createdBy: actor.id, attendees: { create: attendees } }, include: { attendees: true } });
+      const now = new Date();
+      const attribution = input.notes || input.outcome ? { notesCreatedBy: actor.id, notesCreatedByName: actor.name, notesCreatedAt: now, notesUpdatedBy: actor.id, notesUpdatedByName: actor.name, notesUpdatedAt: now } : {};
+      const row = await db.meeting.create({ data: { ...data, ...attribution, createdBy: actor.id, attendees: { create: attendees } }, include: { attendees: true } });
       await audit(db, actor.id, 'CREATE', 'meeting', row.id);
       return row;
     });
@@ -127,6 +129,7 @@ export class WorkService {
   }
   async patchMeeting(actor: Actor, id: string, input: z.infer<typeof meetingPatchSchema>) {
     return this.prisma.$transaction(async db => {
+      await db.$queryRaw`SELECT id FROM "Meeting" WHERE id = ${id}::uuid FOR UPDATE`;
       const row = await db.meeting.findFirst({ where: { id, company: companyScope(actor, true) } });
       if (!row) throw new NotFoundException();
       await requireCompany(db, actor, row.companyId, true);
@@ -137,10 +140,22 @@ export class WorkService {
         await this.attendees(db, row.companyId, attendees);
         await db.meetingAttendee.deleteMany({ where: { meetingId: id } });
       }
-      const result = await db.meeting.update({ where: { id }, data: { ...data, ...(attendees ? { attendees: { create: attendees } } : {}) }, include: { attendees: true } });
+      const changed = (input.notes !== undefined && (input.notes || null) !== (row.notes || null)) || (input.outcome !== undefined && (input.outcome || null) !== (row.outcome || null));
+      const now = new Date();
+      const attribution = changed ? {
+        notesUpdatedBy: actor.id, notesUpdatedByName: actor.name, notesUpdatedAt: now,
+        ...(!row.notesCreatedAt && !row.notesUpdatedAt && !row.notes && !row.outcome ? { notesCreatedBy: actor.id, notesCreatedByName: actor.name, notesCreatedAt: now } : {}),
+      } : {};
+      const result = await db.meeting.update({ where: { id }, data: { ...data, ...attribution, ...(attendees ? { attendees: { create: attendees } } : {}) }, include: { attendees: true } });
       await audit(db, actor.id, 'UPDATE', 'meeting', id, { fields: Object.keys(input) });
       return result;
     });
+  }
+  async meeting(actor: Actor, id: string) {
+    const row = await this.prisma.meeting.findFirst({ where: { id, company: companyScope(actor) }, include: { attendees: true, company: { select: { id: true, displayName: true, archivedAt: true } } } });
+    if (!row) throw new NotFoundException();
+    const writable = actor.role !== 'VIEWER' && !row.company.archivedAt && !!await this.prisma.company.findFirst({ where: { AND: [{ id: row.companyId }, companyScope(actor, true)] }, select: { id: true } });
+    return { ...row, canWrite: writable };
   }
   /**
    * Message notifications are resolved by the messaging module (passed in to keep module imports acyclic). Every kind is filtered

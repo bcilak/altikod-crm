@@ -7,6 +7,7 @@ import { attachmentScanLabels, attachmentUrl, conversationsKey, downloadable, fi
 import { useWorkingDraft } from './working-drafts';
 import { Notice } from './ui';
 import { useLiveIntervals } from './live';
+import { AttachmentPreview } from './attachment-preview';
 
 const messagesKey = (conversationId: string, parentId?: string) => ['messaging-messages', conversationId, parentId ?? null];
 
@@ -31,12 +32,13 @@ function MessageText({ body, mentions = [], meId }: { body: string; mentions?: M
 /** Index of the “@” that starts the mention being typed just before the caret. */
 const mentionStart = (value: string, caret: number) => value.lastIndexOf('@', caret - 1);
 const extension = (name: string) => /\.([a-z0-9]{1,5})$/i.exec(name)?.[1]?.toUpperCase() ?? 'DOSYA';
-/** A sent file: images that passed scanning show as a thumbnail; everything else is a download link. Blocked files explain why. */
+/** Sent files open a preview first; blocked files remain inaccessible. */
 export function AttachmentView({ file }: { file: Attachment }) {
+  const [preview, setPreview] = useState(false);
   if (!downloadable(file)) return <span className="file-chip blocked"><span className="file-ext">{extension(file.name)}</span><span><strong>{file.name}</strong><small className="block">{attachmentScanLabels[file.scanStatus]}</small></span></span>;
-  return <a className="file-chip" href={attachmentUrl(file.id)} download={file.name}>
+  return <><button type="button" className="file-chip" onClick={() => setPreview(true)} aria-label={`${file.name} ön izle`}>
     {file.mimeType.startsWith('image/') ? <img className="file-thumb" src={attachmentUrl(file.id, true)} alt="" loading="lazy" /> : <span className="file-ext">{extension(file.name)}</span>}
-    <span><strong>{file.name}</strong><small className="block">{fileSize(file.size)}{file.scanStatus === 'UNSCANNED' ? ` · ${attachmentScanLabels.UNSCANNED}` : ''}</small></span></a>;
+    <span><strong>{file.name}</strong><small className="block">{fileSize(file.size)} · Ön izle{file.scanStatus === 'UNSCANNED' ? ` · ${attachmentScanLabels.UNSCANNED}` : ''}</small></span></button>{preview && <AttachmentPreview file={file} onClose={() => setPreview(false)} />}</>;
 }
 
 export function Composer({ conversationId, parentId, onSent, label = 'Mesaj yaz' }: { conversationId: string; parentId?: string; onSent?: () => void; label?: string }) {

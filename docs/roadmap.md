@@ -1,5 +1,7 @@
 # IT SalesHub — Uygulama yol haritası
 
+3 Kasım: mesaj eklerine mobil uyumlu [ön izleme ve ayrı indirme](attachment-preview.md) eklendi. API/veritabanı değişikliği yok.
+
 3 Kasım düzeltmeleri: [oturum yenileme ve mesaj okundu bildirim eşlemesi](session-notification-fixes.md). Kullanıcının sohbet tarzı toplantı notları ve toplu bildirim okuma değişiklikleri korunmuştur.
 
 ## Güncel plan — 2 Kasım 2026

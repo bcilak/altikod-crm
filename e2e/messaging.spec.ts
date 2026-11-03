@@ -88,7 +88,7 @@ test('team messaging: channel, direct message, thread, unread badge, record conv
   await expect(drafts.getByText('Teklif taslağı.pdf')).toBeVisible(); await expect(drafts.getByText('ekran.png')).toBeVisible();
   await page.getByRole('button', { name: 'Gönder' }).click();
   await expect(drafts).toHaveCount(0);
-  await expect(page.getByRole('log', { name: 'Mesajlar' }).getByRole('link', { name: /Teklif taslağı\.pdf/ })).toBeVisible();
+  await expect(page.getByRole('log', { name: 'Mesajlar' }).getByRole('button', { name: /Teklif taslağı\.pdf/ })).toBeVisible();
   await page.locator('form.composer input[type=file]').first().setInputFiles({ name: 'program.pdf', mimeType: 'application/pdf', buffer: Buffer.from('MZ not a pdf') });
   await expect(page.locator('form.composer').getByRole('alert')).toContainText('program.pdf: Yalnız PDF');
   await page.screenshot({ path: 'test-results/desktop-messages.png', fullPage: true });
@@ -100,8 +100,13 @@ test('team messaging: channel, direct message, thread, unread badge, record conv
   await sales.getByRole('link', { name: /DEMO E2E Admin.*2 okunmamış mesaj/ }).click();
   await expect(sales.getByText('Teklif taslağına bakabilir misin?')).toBeVisible();
   await expect(sales.getByRole('link', { name: /^Mesajlar$/ })).toBeVisible();
-  const fileLink = sales.getByRole('log', { name: 'Mesajlar' }).getByRole('link', { name: /Teklif taslağı\.pdf/ });
-  const [download] = await Promise.all([sales.waitForEvent('download'), fileLink.click()]);
+  const fileLink = sales.getByRole('log', { name: 'Mesajlar' }).getByRole('button', { name: /Teklif taslağı\.pdf/ });
+  await fileLink.click();
+  const preview = sales.getByRole('dialog'); await expect(preview).toBeVisible();
+  await expect(preview.locator('object')).toHaveAttribute('data', /^blob:/);
+  const [download] = await Promise.all([sales.waitForEvent('download'), preview.getByRole('link', { name: 'İndir', exact: true }).click()]);
+  await preview.getByRole('button', { name: 'Ön izlemeyi kapat' }).click();
+  await expect(preview).toHaveCount(0);
   expect(download.suggestedFilename()).toBe('Teklif taslağı.pdf');
   const { readFile: read } = await import('node:fs/promises'); expect((await read((await download.path())!)).equals(pdf)).toBeTruthy();
   await expect(sales.getByRole('log', { name: 'Mesajlar' }).locator('img.file-thumb')).toHaveJSProperty('naturalWidth', 1);
@@ -151,6 +156,11 @@ test('team messaging: channel, direct message, thread, unread badge, record conv
   await page.getByRole('link', { name: /E2E Satış Uzmanı/ }).click();
   await expect(page.getByText('Teklif taslağına bakabilir misin?')).toBeVisible(); expect(await noOverflow(page)).toBeTruthy();
   await expect(page.getByRole('heading', { name: 'Kanallar' })).toBeHidden();
+  await page.getByRole('log', { name: 'Mesajlar' }).getByRole('button', { name: 'ekran.png ön izle' }).click();
+  await expect(page.getByRole('dialog').getByRole('img')).toHaveJSProperty('naturalWidth', 1);
+  expect(await noOverflow(page)).toBeTruthy();
+  await page.screenshot({ path: 'test-results/mobile-attachment-preview.png', fullPage: true });
+  await page.getByRole('button', { name: 'Ön izlemeyi kapat' }).click();
   await page.screenshot({ path: 'test-results/mobile-messages.png', fullPage: true });
   await page.getByRole('button', { name: '← Konuşmalar' }).click();
   await expect(page.getByRole('heading', { name: 'Kanallar' })).toBeVisible();

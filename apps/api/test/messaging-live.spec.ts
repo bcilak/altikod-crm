@@ -109,6 +109,24 @@ test('Phase 8 (F8-05): mentions, message notifications and live updates', async 
       await call(tech, 'post', `/notifications/${item.id}/read`).expect(201);
     });
 
+    await t.test('reading clears only this user and conversation up to the read sequence; broadcasts changes', async () => {
+      const dm = (await call(salesA, 'post', '/messaging/direct', { userId: salesB.id }).expect(201)).body;
+      const first = (await post(salesA, dm.id, 'Read this').expect(201)).body;
+      const second = (await post(salesA, dm.id, 'Keep unread').expect(201)).body;
+      const other = (await call(salesA, 'post', '/messaging/conversations', { kind: 'GROUP', name: 'Other unread', memberIds: [salesB.id] }).expect(201)).body;
+      const unrelated = (await post(salesA, other.id, 'Other notice', { mentionIds: [salesB.id] }).expect(201)).body;
+      const stream = await open(salesB); const before = got(stream, 'notification');
+      await call(salesB, 'post', `/messaging/conversations/${dm.id}/read`, { seq: first.seq }).expect(201);
+      assert.ok((await db.notification.findFirstOrThrow({ where: { messageId: first.id, userId: salesB.id } })).readAt);
+      assert.equal((await db.notification.findFirstOrThrow({ where: { messageId: second.id, userId: salesB.id } })).readAt, null);
+      assert.equal((await db.notification.findFirstOrThrow({ where: { messageId: unrelated.id, userId: salesB.id } })).readAt, null);
+      await until(() => got(stream, 'notification') > before);
+      await call(salesB, 'post', `/messaging/conversations/${dm.id}/read`, { seq: second.seq }).expect(201);
+      const stale = await call(salesB, 'post', `/messaging/conversations/${dm.id}/read`, { seq: first.seq }).expect(201);
+      assert.equal(stale.body.lastReadSeq, second.seq);
+      assert.ok((await db.notification.findFirstOrThrow({ where: { messageId: second.id, userId: salesB.id } })).readAt);
+      stream.close();
+    });
     await t.test('message notifications disappear when access to the record is revoked', async () => {
       const company = (await call(salesA, 'post', '/companies', { displayName: 'P8L Paylaşım', legalName: 'P8L Paylaşım AŞ' }).expect(201)).body;
       await call(salesA, 'post', `/companies/${company.id}/shares`, { userId: salesB.id, permission: 'READ' }).expect(201);

@@ -1,5 +1,5 @@
 import { Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res } from '@nestjs/common';
-import { ApiBody, ApiConsumes, ApiProduces, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiProduces, ApiQuery, ApiTags, ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { conversationMuteSchema, messageReactionSchema, messageEditSchema, messageHideSchema, messageKnowledgeSchema, messageSearchSchema, conversationCreateSchema, conversationListSchema, conversationMembersSchema, conversationPatchSchema, conversationReadSchema, directConversationSchema, messageCreateSchema, messageListSchema, recordConversationSchema } from '@saleshub/shared';
@@ -36,6 +36,7 @@ export class MessagingController {
   @Post('conversations/:id/leave') leave(@Req() r: AuthRequest, @Param('id', UUID) id: string) { return this.messaging.leave(r.actor, id); }
   @Get('conversations/:id/messages') messages(@Req() r: AuthRequest, @Param('id', UUID) id: string, @Query(new V(messageListSchema)) q: z.infer<typeof messageListSchema>) { return this.messaging.messages(r.actor, id, q); }
   @Post('conversations/:id/messages') send(@Req() r: AuthRequest, @Param('id', UUID) id: string, @Input(messageCreateSchema) b: z.infer<typeof messageCreateSchema>) { return this.messaging.send(r.actor, id, b); }
+  @ApiOperation({ description: 'Okuma işaretini ilerletir ve aynı kullanıcının bu konuşmada okunan sıraya kadar mesaj bildirimlerini okundu yapar. Yeni mesajlar etkilenmez; işaret geri gitmez. Diğer cihazlara SSE yenileme sinyali iletilir.' })
   @Post('conversations/:id/read') read(@Req() r: AuthRequest, @Param('id', UUID) id: string, @Input(conversationReadSchema) b: z.infer<typeof conversationReadSchema>) { return this.messaging.read(r.actor, id, b.seq); }
   /** Raw upload: Content-Type application/octet-stream, file name in ?name=. Type is detected from content and scanned before storage. */
   @ApiConsumes('application/octet-stream') @ApiBody({ schema: { type: 'string', format: 'binary' }, description: 'File bytes, at most 20 MB' }) @ApiQuery({ name: 'name', required: true, description: 'Original file name; its extension must match the content' })

@@ -97,9 +97,12 @@ export class MessagingService {
     if (!row) throw new NotFoundException('Konuşma bulunamadı');
     return row;
   }
-  private markRead(db: Db, conversationId: string, userId: string, seq: number) {
-    return db.$executeRaw`INSERT INTO "ConversationReadState" ("conversationId", "userId", "lastReadSeq", "updatedAt") VALUES (${conversationId}::uuid, ${userId}::uuid, ${seq}, NOW())
-      ON CONFLICT ("conversationId", "userId") DO UPDATE SET "lastReadSeq" = GREATEST("ConversationReadState"."lastReadSeq", EXCLUDED."lastReadSeq"), "updatedAt" = NOW()`;
+  private async markRead(db: Db, conversationId: string, userId: string, seq: number) {
+    await db.$executeRaw`INSERT INTO "ConversationReadState" ("conversationId", "userId", "lastReadSeq", "updatedAt") VALUES (${conversationId}::uuid, ${userId}::uuid, ${seq}, NOW())
+      ON CONFLICT ("conversationId", "userId") DO UPDATE SET "lastReadSeq" = EXCLUDED."lastReadSeq", "updatedAt" = NOW() WHERE "ConversationReadState"."lastReadSeq" < EXCLUDED."lastReadSeq"`;
+    const read = await db.conversationReadState.findUniqueOrThrow({ where: { conversationId_userId: { conversationId, userId } } });
+    await db.notification.updateMany({ where: { userId, readAt: null, message: { conversationId, seq: { lte: read.lastReadSeq } } }, data: { readAt: new Date() } });
+    return read.lastReadSeq;
   }
   /** Active users other than the actor; GROUP members additionally may not be VIEWER (read-only role is limited to channels and direct messages). */
   private async validUsers(db: Db, actor: Actor, ids: string[], kind: ConversationKind) {
@@ -338,9 +341,10 @@ export class MessagingService {
     return new Map(rows.map(r => { const c = this.dto(actor, r); return [c.id, { id: c.id, kind: c.kind, name: c.kind === 'CHANNEL' ? `#${c.name}` : c.name, record: c.record }]; }));
   }
   async read(actor: Actor, id: string, seq: number) {
-    const row = await this.visible(this.prisma, actor, id);
-    await this.markRead(this.prisma, id, actor.id, Math.min(seq, row.lastSeq));
-    return { lastReadSeq: Math.max(row.reads[0]?.lastReadSeq ?? 0, Math.min(seq, row.lastSeq)) };
+    return this.prisma.$transaction(async db => {
+      const row = await this.visible(db, actor, id);
+      return { lastReadSeq: await this.markRead(db, id, actor.id, Math.min(seq, row.lastSeq)) };
+    });
   }
   /** Minimal people directory for starting conversations: name and role only, no contact details. */
   users(actor: Actor, search?: string) {

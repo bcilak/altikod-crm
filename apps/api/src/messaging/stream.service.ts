@@ -1,5 +1,6 @@
 import { HttpException, Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { Client } from 'pg';
+import { SESSION_MAX_MS } from '../auth/session-policy';
 import type { Request, Response } from 'express';
 import { PrismaService } from '../prisma.service';
 import { parseEnv } from '../env';
@@ -64,8 +65,8 @@ export class MessagingStream implements OnModuleDestroy {
   }
   /** False (and disconnects) when the session behind the stream is no longer valid; refreshes the role otherwise. */
   private async alive(s: Subscriber) {
-    const session = await this.prisma.session.findUnique({ where: { id: s.actor.sessionId }, select: { revokedAt: true, expiresAt: true, user: { select: { isActive: true, role: true } } } });
-    if (!session || session.revokedAt || session.expiresAt <= new Date() || !session.user.isActive) { this.drop(s); return false; }
+    const session = await this.prisma.session.findUnique({ where: { id: s.actor.sessionId }, select: { revokedAt: true, expiresAt: true, createdAt: true, user: { select: { isActive: true, role: true } } } });
+    if (!session || session.revokedAt || session.expiresAt <= new Date() || session.createdAt.getTime() + SESSION_MAX_MS <= Date.now() || !session.user.isActive) { this.drop(s); return false; }
     s.actor = { ...s.actor, role: session.user.role };
     return true;
   }

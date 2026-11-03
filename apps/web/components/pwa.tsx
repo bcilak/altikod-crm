@@ -24,7 +24,7 @@ export async function forgetThisDevice() { try { await (await currentSubscriptio
 
 /**
  * App shell integration: registers the service worker, re-binds an existing subscription to the current session
- * (sessions last 8 h; subscriptions outlive them), follows notification clicks and mirrors unread counts on the app icon.
+ * (subscriptions outlive individual sessions), follows notification clicks and mirrors unread counts on the app icon.
  */
 export function useAppShell(unread: number) {
   const router = useRouter();

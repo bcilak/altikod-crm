@@ -4,6 +4,7 @@ import type { Response } from 'express';
 import { z } from 'zod';
 import { email, inviteSchema, loginSchema, tokenPasswordSchema, userPatchSchema, createUserSchema, adminPasswordSchema, changePasswordSchema } from '@saleshub/shared';
 import { AuthService } from './auth.service';
+import { SESSION_IDLE_MS, sessionCookie } from './session-policy';
 import { Access, Public, PasswordChangeAllowed, type AuthRequest } from '../security/access';
 import { ZodValidationPipe, ValidatedBody as Input } from '../validation.pipe';
 
@@ -14,7 +15,7 @@ export class AuthController {
   @Public() @Post('login')
   async login(@Input(loginSchema) input: z.infer<typeof loginSchema>, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.login(input.email, input.password);
-    res.cookie('saleshub_session', result.token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 8 * 3600_000 });
+    res.cookie('saleshub_session', result.token, sessionCookie(SESSION_IDLE_MS));
     return { user: result.user, csrfToken: result.csrfToken };
   }
   @PasswordChangeAllowed()

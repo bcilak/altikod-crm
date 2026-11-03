@@ -27,7 +27,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       source.addEventListener('message', e => { const { conversationId } = JSON.parse((e as MessageEvent).data); refresh([conversationsKey, ['messaging-messages', conversationId], filesKey(conversationId)]); });
       source.addEventListener('attachment', e => { const { conversationId } = JSON.parse((e as MessageEvent).data); refresh([['messaging-messages', conversationId], filesKey(conversationId)]); });
       source.addEventListener('update', e => { const { conversationId } = JSON.parse((e as MessageEvent).data); refresh([['messaging-messages', conversationId], filesKey(conversationId), pinsKey(conversationId), ['messaging-revisions']]); });
-      source.addEventListener('notification', () => refresh([['/notifications']]));
+      source.addEventListener('notification', () => refresh([['/notifications'], conversationsKey]));
       source.onerror = () => {
         setState('offline');
         if (source?.readyState === EventSource.CLOSED && !stopped) { source.close(); retry = setTimeout(connect, delay); delay = Math.min(delay * 2, 60_000); }

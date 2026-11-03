@@ -98,10 +98,10 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
   /** Claims and sends one notification. A claim is final: push is best-effort, the in-app notification always remains. */
   async deliver(notificationId: string) {
     if (!this.config()) return false;
-    const { count } = await this.prisma.notification.updateMany({ where: { id: notificationId, pushClaimedAt: null, createdAt: { gt: new Date(Date.now() - staleMs) } }, data: { pushClaimedAt: new Date() } });
+    const { count } = await this.prisma.notification.updateMany({ where: { id: notificationId, readAt: null, pushClaimedAt: null, createdAt: { gt: new Date(Date.now() - staleMs) } }, data: { pushClaimedAt: new Date() } });
     if (!count) return false;
     const n = await this.prisma.notification.findUniqueOrThrow({ where: { id: notificationId }, include: { user: { select: { id: true, role: true, isActive: true } } } });
-    if (!n.user.isActive) return false;
+    if (!n.user.isActive || n.readAt) return false;
     const devices = await this.prisma.pushSubscription.findMany({ where: { userId: n.userId } });
     if (!devices.length) return false;
     const reader = { ...n.user, name: '', email: '', sessionId: '', csrfToken: '' } as Actor;
@@ -146,7 +146,7 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
   /** Safety net for missed signals; notifications older than an hour are closed without a push. */
   async sweep() {
     await this.prisma.notification.updateMany({ where: { pushClaimedAt: null, createdAt: { lte: new Date(Date.now() - staleMs) } }, data: { pushClaimedAt: new Date() } });
-    const pending = await this.prisma.notification.findMany({ where: { pushClaimedAt: null }, orderBy: { createdAt: 'asc' }, take: 100, select: { id: true } });
+    const pending = await this.prisma.notification.findMany({ where: { pushClaimedAt: null, readAt: null }, orderBy: { createdAt: 'asc' }, take: 100, select: { id: true } });
     for (const p of pending) await this.deliver(p.id);
     return pending.length;
   }

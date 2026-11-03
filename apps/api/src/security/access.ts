@@ -2,6 +2,8 @@ import { CanActivate, ExecutionContext, ForbiddenException, HttpException, Injec
 import { Reflector } from '@nestjs/core';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { Request } from 'express';
+import type { Response } from 'express';
+import { SESSION_IDLE_MS, SESSION_MAX_MS, SESSION_REFRESH_MS, sessionCookie } from '../auth/session-policy';
 import { PrismaService } from '../prisma.service';
 import { parseEnv } from '../env';
 import type { Role } from '../generated/prisma/client';
@@ -35,7 +37,8 @@ export class AccessGuard implements CanActivate {
     const token = req.headers.cookie?.split(';').map(v => v.trim()).find(v => v.startsWith('saleshub_session='))?.slice('saleshub_session='.length);
     if (!token || !/^[a-f0-9]{64}$/.test(token)) throw new UnauthorizedException('Oturum gerekli');
     const session = await this.prisma.session.findUnique({ where: { tokenHash: digest(token) }, include: { user: true } });
-    if (!session || session.revokedAt || session.expiresAt <= new Date() || !session.user.isActive) throw new UnauthorizedException('Oturum sona erdi');
+    const now = Date.now();
+    if (!session || session.revokedAt || session.expiresAt.getTime() <= now || session.createdAt.getTime() + SESSION_MAX_MS <= now || !session.user.isActive) throw new UnauthorizedException('Oturum sona erdi');
     req.actor = { id: session.user.id, role: session.user.role, name: session.user.name, email: session.user.email, sessionId: session.id, csrfToken: session.csrfToken, mustChangePassword: session.user.mustChangePassword };
     if (session.user.mustChangePassword && !this.reflector.get<boolean>('passwordChangeAllowed', context.getHandler())) throw new ForbiddenException('Devam etmek için parolanızı değiştirin');
     if (mutation && !safeEqual(String(req.headers['x-csrf-token'] ?? ''), session.csrfToken)) throw new ForbiddenException('Geçersiz CSRF doğrulaması');
@@ -43,6 +46,11 @@ export class AccessGuard implements CanActivate {
     if (!permission || !await this.prisma.rolePermission.findUnique({ where: { role_resource_action: { role: req.actor.role, ...permission } } })) {
       await this.prisma.auditLog.create({ data: { actorId: req.actor.id, action: 'ACCESS_DENIED', entity: 'permission' } });
       throw new ForbiddenException('Bu işlem için yetkiniz yok');
+    }
+    const expiresAt = new Date(Math.min(now + SESSION_IDLE_MS, session.createdAt.getTime() + SESSION_MAX_MS));
+    if (expiresAt.getTime() - session.expiresAt.getTime() >= SESSION_REFRESH_MS) {
+      const refreshed = await this.prisma.session.updateMany({ where: { id: session.id, revokedAt: null, expiresAt: { gt: new Date(now), lt: expiresAt }, user: { isActive: true } }, data: { expiresAt } });
+      if (refreshed.count) context.switchToHttp().getResponse<Response>().cookie('saleshub_session', token, sessionCookie(expiresAt.getTime() - now));
     }
     return true;
   }

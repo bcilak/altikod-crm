@@ -1,0 +1,10 @@
+# Oturum ve okundu bildirimleri — 3 Kasım 2026
+
+- Sabit 8 saatlik oturum yerine 7 günlük hareketsizlik penceresi, girişten itibaren en fazla 30 gün uygulanır. Yetkili API trafiğinde en fazla saatte bir DB süresi ve HttpOnly/SameSite cookie birlikte yenilenir. Arka plan sorguları da etkinlik sayılır; 30 günlük üst sınır uzamaz. SSE heartbeat tek başına yenilemez. Süresi dolmuş/iptal edilmiş oturum yeniden etkinleşmez. Çıkış, parola değişikliği ve hesap pasifleştirme iptalleri korunur. Mevcut oturumu dolmuş kullanıcı bir kez giriş yapmalıdır.
+- Konuşmanın `/read` işlemi aynı transaction içinde okuma işaretini ve yalnız o kullanıcının aynı konuşmada o sıraya kadar olan mesaj bildirimlerini okundu yapar. Yeni mesajlar, başka konuşmalar ve görev/teklif bildirimleri etkilenmez; geriden gelen istek işareti geri almaz. Önceden okunmuş konuşma tekrar açıldığında kalmış bildirimler de temizlenir.
+- Sekme görünür olduğunda okuma yeniden denenir. Arayüz konuşma ve bildirim sorgularını yeniler. Yeni DB trigger'ları readAt/okuma işareti değişimini kullanıcıya özel SSE sinyaliyle diğer cihazlara iletir. Okundu olmuş, henüz gönderilmemiş push bildirimleri gönderilmez. Daha önce telefonun bildirim merkezine teslim edilmiş bildirimlerin işletim sistemi tarafından kaldırılması bu değişikliğin kapsamında değildir.
+- Migration: `20261103000000_read_notification_signals`. Mevcut veriler silinmez; sunucu güncellemesinde migrate çalıştırılmalıdır. API yolları/gövdeleri değişmez; `/messaging/conversations/:id/read` artık bildirim okundu durumunu da eşler. Oturum kuralları cookie ve DB için ortaktır.
+
+Kabul testleri: çalışma gününü aşan oturum yenileme, cookie, 30 günlük üst sınır, süresi dolmuş/iptal edilmiş oturum reddi; kısmi okuma, başka konuşma izolasyonu, geriden gelen okuma, SSE sinyali, okunmuş bildirim için push reddi ve tarayıcı bildirim sayacının temizlenmesi.
+
+Doğrulama (3 Kasım 2026): lint ve typecheck başarılı; 89/89 entegrasyon testi, 9/9 Playwright testi başarılı. Web üretim derlemesi Webpack ile başarılı. Üretim sunucusuna dağıtım henüz yapılmadı.

@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma.service';
 import { Actor, digest } from '../security/access';
 import { audit } from '../security/policy';
 import { Mailer } from './mailer';
+import { SESSION_IDLE_MS } from './session-policy';
 import { parseEnv } from '../env';
 import { Role } from '../generated/prisma/client';
 
@@ -28,7 +29,7 @@ export class AuthService {
       await db.$queryRaw`SELECT id FROM "User" WHERE id = ${user.id}::uuid FOR UPDATE`;
       const current = await db.user.findUniqueOrThrow({ where: { id: user.id } });
       if (!current.isActive || current.passwordHash !== user.passwordHash) throw new UnauthorizedException('Hesap değişti; tekrar giriş yapın');
-      await db.session.create({ data: { userId: user.id, tokenHash: digest(token), csrfToken, expiresAt: new Date(Date.now() + 8 * 3600_000) } });
+      await db.session.create({ data: { userId: user.id, tokenHash: digest(token), csrfToken, expiresAt: new Date(Date.now() + SESSION_IDLE_MS) } });
       await audit(db, user.id, 'LOGIN', 'auth');
     });
     return { token, csrfToken, user: { id: user.id, name: user.name, email: user.email, role: user.role, mustChangePassword: user.mustChangePassword } };

@@ -1,5 +1,7 @@
 # IT SalesHub — Uygulama yol haritası
 
+3 Kasım düzeltmeleri: [oturum yenileme ve mesaj okundu bildirim eşlemesi](session-notification-fixes.md). Kullanıcının sohbet tarzı toplantı notları ve toplu bildirim okuma değişiklikleri korunmuştur.
+
 ## Güncel plan — 2 Kasım 2026
 
 Toplantı notlarına ilk/son kaydeden kişi ve UTC tarih bilgisi, ayrı mobil okuma sayfası eklendi. Eski kayıtlara yazar/tarih uydurulmaz. Migration ve kabul: [toplantı notları](meeting-notes.md).

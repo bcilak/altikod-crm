@@ -215,8 +215,15 @@ export function MessageStream({ conversationId, parentId, meId, canPost, abiliti
     lastSeen.current = newest;
   }, [newest, parentId]);
   useEffect(() => {
-    const page = latest.data; if (parentId || !page || page.lastSeq <= page.readSeq || document.visibilityState !== 'visible') return;
-    void api(`/messaging/conversations/${conversationId}/read`, 'POST', { seq: page.lastSeq }).then(() => cache.invalidateQueries({ queryKey: conversationsKey })).catch(() => undefined);
+    const page = latest.data; if (parentId || !page || !page.lastSeq) return;
+    const mark = () => {
+      if (document.visibilityState !== 'visible') return;
+      void api(`/messaging/conversations/${conversationId}/read`, 'POST', { seq: page.lastSeq }).then(() => Promise.all([
+        cache.invalidateQueries({ queryKey: conversationsKey }), cache.invalidateQueries({ queryKey: ['/notifications'] }),
+      ])).catch(() => undefined);
+    };
+    mark(); document.addEventListener('visibilitychange', mark);
+    return () => document.removeEventListener('visibilitychange', mark);
   }, [latest.data, conversationId, parentId, cache]);
   const loadOlder = async () => {
     setLoadError(undefined);

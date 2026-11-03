@@ -127,6 +127,7 @@ test('team messaging: channel, direct message, thread, unread badge, record conv
   await expect(sales.getByText('kanal toplantısı')).toHaveCount(0);
   await mentionNote.getByRole('link', { name: 'DEMO E2E Admin · #genel' }).click();
   await expect(sales.locator('.mention.me', { hasText: '@E2E Satış Uzmanı' })).toBeVisible();
+  await expect(sales.getByRole('link', { name: 'Bildirimler', exact: true })).toBeVisible({ timeout: 5_000 });
 
   // Record conversation lives on the company page and stays invisible to a colleague without access.
   const firm = await send('post', '/companies', { displayName: 'E2E Mesaj Firması', legalName: 'E2E Mesaj AŞ' });

@@ -117,6 +117,9 @@ test('Faz 9: phone notifications (Web Push) and message reactions', async t => {
       assert.equal(await push.deliver(notification.id), false); await push.sweep();
       await sleep(200); assert.equal(at('/b-phone').length, 2);
       assert.ok((await db.pushSubscription.findUniqueOrThrow({ where: { id } })).lastSuccessAt);
+      const alreadyRead = await db.notification.create({ data: { userId: salesB.id, messageId: notification.messageId, type: 'MESSAGE_DIRECT', dedupeKey: 'already-read-push-test', readAt: new Date() } });
+      assert.equal(await push.deliver(alreadyRead.id), false);
+      await push.sweep(); await sleep(100); assert.equal(at('/b-phone').length, 2);
     });
 
     await t.test('content follows current access; inactive users and channel chatter get nothing', async () => {

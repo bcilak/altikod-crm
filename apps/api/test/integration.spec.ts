@@ -32,6 +32,25 @@ test('Phases 1–3: real PostgreSQL security and business workflows', async t =>
     for (const [name, role] of [['admin', 'ADMIN'], ['manager', 'MANAGER'], ['salesa', 'SALES'], ['salesb', 'SALES'], ['tech', 'TECHNICAL'], ['viewer', 'VIEWER']] as [string, Role][]) await db.user.create({ data: { name, email: `${name}@example.invalid`, role, passwordHash: await hashPassword(password) } });
     const admin = await login('admin@example.invalid'); const manager = await login('manager@example.invalid'); const a = await login('salesa@example.invalid'); const b = await login('salesb@example.invalid'); const tech = await login('tech@example.invalid'); const viewer = await login('viewer@example.invalid');
     let companyId = ''; let otherCompanyId = ''; let contactId = ''; let opportunityId = ''; let taskId = '';
+    await t.test('sessions renew beyond a workday but never revive expired or revoked sessions', async () => {
+      const row = await db.session.findFirstOrThrow({ where: { userId: a.id, revokedAt: null } });
+      assert.ok(row.expiresAt.getTime() - Date.now() > 6 * 86400_000);
+      await db.session.update({ where: { id: row.id }, data: { createdAt: new Date(Date.now() - 9 * 3600_000), expiresAt: new Date(Date.now() + 10000) } });
+      const refreshed = await call(a, 'get', '/auth/me').expect(200);
+      assert.match(String(refreshed.headers['set-cookie']), /Max-Age=604/);
+      assert.ok((await db.session.findUniqueOrThrow({ where: { id: row.id } })).expiresAt.getTime() - Date.now() > 6 * 86400_000);
+      await db.session.update({ where: { id: row.id }, data: { createdAt: new Date(Date.now() - 29 * 86400_000), expiresAt: new Date(Date.now() + 10000) } });
+      await call(a, 'get', '/auth/me').expect(200);
+      assert.ok((await db.session.findUniqueOrThrow({ where: { id: row.id } })).expiresAt.getTime() - Date.now() <= 86400_000);
+      await db.session.update({ where: { id: row.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+      await call(a, 'get', '/auth/me').expect(401);
+      await db.session.update({ where: { id: row.id }, data: { createdAt: new Date(Date.now() - 31 * 86400_000), expiresAt: new Date(Date.now() + 86400_000) } });
+      await call(a, 'get', '/auth/me').expect(401);
+      await db.session.update({ where: { id: row.id }, data: { createdAt: new Date(), revokedAt: new Date() } });
+      await call(a, 'get', '/auth/me').expect(401);
+      // Restore only this fixture for the remaining permission/workflow scenarios.
+      await db.session.update({ where: { id: row.id }, data: { revokedAt: null } });
+    });
     await t.test('cookie session, CSRF, origin and deny-by-default', async () => {
       await request(app.getHttpServer()).get('/api/v1/companies').expect(401);
       await request(app.getHttpServer()).post('/api/v1/companies').set('Cookie', a.cookie).set('Origin', 'http://localhost:3000').send({}).expect(403);
